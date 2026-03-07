@@ -398,7 +398,7 @@ git commit -m "feat: configure Clerk auth middleware"
 
 ---
 
-### Task 12: Configure Drizzle schema
+### ~~Task 12: Configure Drizzle schema~~ ✅
 
 **Files:**
 - Create: `src/db/schema.ts`
