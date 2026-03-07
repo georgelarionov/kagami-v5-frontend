@@ -4,7 +4,7 @@ import { useMemo } from 'react'
 import { useChatRun } from '@/hooks/use-chat-run'
 import { useChatMessages } from '@/hooks/use-chat-messages'
 import { MessageList } from './message-list'
-import type { Message } from './message-list'
+import type { Message } from '@/types/chat'
 import { Composer } from './composer'
 import { RunStatus } from './run-status'
 
@@ -13,7 +13,7 @@ interface ChatPageProps {
 }
 
 export function ChatPage({ chatId }: ChatPageProps) {
-  const { sendMessage, status, error, isRunning, pendingMessage } = useChatRun(chatId)
+  const { sendMessage, retry, status, error, isRunning, pendingMessage } = useChatRun(chatId)
   const { data: messages = [], isLoading } = useChatMessages(chatId)
 
   const allMessages: Message[] = useMemo(() => {
@@ -34,7 +34,7 @@ export function ChatPage({ chatId }: ChatPageProps) {
         <MessageList messages={allMessages} isLoading={isLoading} />
       </div>
       <div>
-        <RunStatus status={status} error={error} />
+        <RunStatus status={status} error={error} onRetry={status === 'failed' ? retry : undefined} />
         <Composer onSend={sendMessage} disabled={isRunning} />
       </div>
     </div>

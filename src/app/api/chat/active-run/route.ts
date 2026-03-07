@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
     const workflow = mastraClient.getWorkflow('chat-workflow')
     const result = await workflow.runById(chat.lastRunId)
 
-    if (result?.status === 'running' || result?.status === 'waiting') {
+    const isActive = result?.status === 'running' || result?.status === 'waiting' || result?.status === 'pending' || result?.status === 'paused'
+    if (isActive) {
       return NextResponse.json({
         activeRun: { runId: chat.lastRunId, status: result.status, pendingMessage: chat.pendingMessage },
       })

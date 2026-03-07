@@ -2,12 +2,7 @@
 
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { useEffect, useRef } from 'react'
-
-export interface Message {
-  id: string
-  role: string
-  content: unknown
-}
+import type { Message } from '@/types/chat'
 
 interface MessageListProps {
   messages: Message[]
@@ -43,10 +38,13 @@ function renderContent(content: unknown): string {
 }
 
 export function MessageList({ messages, isLoading }: MessageListProps) {
-  const bottomRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const viewport = contentRef.current?.closest('[data-slot="scroll-area-viewport"]')
+    if (viewport) {
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' })
+    }
   }, [messages])
 
   if (isLoading && messages.length === 0) {
@@ -67,7 +65,7 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
 
   return (
     <ScrollArea className="h-full p-4">
-      <div className="space-y-4 max-w-2xl mx-auto">
+      <div ref={contentRef} className="space-y-4 max-w-2xl mx-auto">
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -84,7 +82,6 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
             </div>
           </div>
         ))}
-        <div ref={bottomRef} />
       </div>
     </ScrollArea>
   )

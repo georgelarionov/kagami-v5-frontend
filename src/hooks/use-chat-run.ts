@@ -5,6 +5,8 @@ import { useQueryClient } from '@tanstack/react-query'
 
 type RunStatus = 'idle' | 'running' | 'success' | 'failed'
 
+const MAX_POLL_DURATION = 60 * 60 * 1000 // 1 hour
+
 function getPollingInterval(elapsedMs: number): number {
   if (elapsedMs < 5000) return 500
   if (elapsedMs < 15000) return 2000
@@ -27,12 +29,21 @@ export function useChatRun(chatId: string) {
   const pollRun = useCallback(
     async (currentRunId: string) => {
       try {
+        const elapsed = Date.now() - startTimeRef.current
+        if (elapsed > MAX_POLL_DURATION) {
+          setStatus('failed')
+          setError('Polling timed out after 1 hour')
+          stopPolling()
+          return
+        }
+
         const res = await fetch(`/api/chat/runs/${currentRunId}?chatId=${chatId}`)
         if (!res.ok) throw new Error('Poll failed')
         const data = await res.json()
 
         if (data.status === 'success') {
           setStatus('success')
+          setError(null)
           setPendingMessage(null)
           stopPolling()
           queryClient.invalidateQueries({ queryKey: ['memory', 'messages', chatId] })
@@ -42,7 +53,6 @@ export function useChatRun(chatId: string) {
         // All terminal non-success statuses: failed, tripwire, canceled, bailed, suspended
         if (data.status && data.status !== 'running' && data.status !== 'waiting' && data.status !== 'pending' && data.status !== 'paused') {
           setStatus('failed')
-          setPendingMessage(null)
           const errMsg =
             typeof data.error === 'string'
               ? data.error
@@ -53,7 +63,6 @@ export function useChatRun(chatId: string) {
         }
 
         // Still running — schedule next poll
-        const elapsed = Date.now() - startTimeRef.current
         const interval = getPollingInterval(elapsed)
         timerRef.current = setTimeout(() => pollRun(currentRunId), interval)
       } catch {
@@ -104,6 +113,12 @@ export function useChatRun(chatId: string) {
     [chatId, startPolling],
   )
 
+  const retry = useCallback(() => {
+    if (pendingMessage) {
+      sendMessage(pendingMessage)
+    }
+  }, [pendingMessage, sendMessage])
+
   // On mount: check for active run
   useEffect(() => {
     async function checkActiveRun() {
@@ -125,6 +140,7 @@ export function useChatRun(chatId: string) {
 
   return {
     sendMessage,
+    retry,
     status,
     error,
     runId,

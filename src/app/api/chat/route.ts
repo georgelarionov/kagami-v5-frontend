@@ -9,8 +9,13 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth()
   if (!userId) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { message, chatId } = await req.json()
-  if (!message || !chatId) {
+  let message: string, chatId: string
+  try {
+    ({ message, chatId } = await req.json())
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+  if (!message || typeof message !== 'string' || !chatId) {
     return NextResponse.json({ error: 'Missing message or chatId' }, { status: 400 })
   }
 
@@ -27,7 +32,8 @@ export async function POST(req: NextRequest) {
     const workflow = mastraClient.getWorkflow('chat-workflow')
     try {
       const existing = await workflow.runById(chat.lastRunId)
-      if (existing?.status === 'running' || existing?.status === 'waiting') {
+      const isActive = existing?.status === 'running' || existing?.status === 'waiting' || existing?.status === 'pending' || existing?.status === 'paused'
+      if (isActive) {
         return NextResponse.json({ error: 'Active run exists' }, { status: 409 })
       }
     } catch {
@@ -41,7 +47,7 @@ export async function POST(req: NextRequest) {
 
   // Create run
   const workflow = mastraClient.getWorkflow('chat-workflow')
-  const run = await workflow.createRun()
+  const run = await workflow.createRun({ resourceId })
 
   // Save-before-start: save runId + pending message
   await db.update(chats).set({ lastRunId: run.runId, pendingMessage: message }).where(eq(chats.id, chatId))
