@@ -563,7 +563,7 @@ git commit -m "feat: configure MastraClient for BFF"
 
 ---
 
-### Task 15: Build chat API routes
+### ~~Task 15: Build chat API routes~~ ✅
 
 **Files:**
 - Create: `src/app/api/chat/route.ts` (POST — send message)
