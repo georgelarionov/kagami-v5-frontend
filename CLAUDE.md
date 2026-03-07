@@ -78,7 +78,7 @@ drizzle/                # Generated migrations
 ## Environment Variables
 
 See `.env.example`. Key vars:
-- `MASTRA_API_URL` — Mastra Server URL. Local: `http://localhost:4111`. Railway: `http://kagami-v5.railway.internal`
+- `MASTRA_API_URL` — Mastra Server URL. Local: `http://localhost:4111`. Railway: `http://kagami-v5.railway.internal:8080` (private networking requires explicit port)
 - `DATABASE_URL` — Neon pooled (`-pooler`) for runtime
 - `DATABASE_URL_DIRECT` — Neon direct for migrations
 - `NEXT_PUBLIC_PROJECT_ID` / `NEXT_PUBLIC_CHAT_ID` — hardcoded IDs from seed script (MVP only)
@@ -119,4 +119,4 @@ The BFF uses `@mastra/client-js` to communicate with Mastra Server:
 Both services in the same Railway project for private networking:
 - kagami-api: internal only (no public domain)
 - kagami-web: public domain for users
-- `MASTRA_API_URL=http://kagami-v5.railway.internal` (no port — Railway proxies)
+- `MASTRA_API_URL=http://kagami-v5.railway.internal:8080` (private networking requires explicit port — no proxying)
