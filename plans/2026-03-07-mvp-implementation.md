@@ -969,7 +969,7 @@ git commit -m "feat: add useChatMessages hook with react-query"
 
 ---
 
-### Task 18: Build chat UI
+### ~~Task 18: Build chat UI~~ ✅
 
 **Files:**
 - Create: `src/components/chat/chat-page.tsx`
@@ -1194,7 +1194,7 @@ git commit -m "feat: add chat UI (message list, composer, run status)"
 
 ## Phase 3: End-to-end verification
 
-### Task 19: Test background execution
+### ~~Task 19: Test background execution~~ ✅
 
 **Step 1:** Send a message in the chat UI.
 

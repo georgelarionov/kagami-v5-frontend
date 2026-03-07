@@ -15,6 +15,7 @@ export function useChatRun(chatId: string) {
   const [runId, setRunId] = useState<string | null>(null)
   const [status, setStatus] = useState<RunStatus>('idle')
   const [error, setError] = useState<string | null>(null)
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null)
   const startTimeRef = useRef<number>(0)
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const queryClient = useQueryClient()
@@ -32,6 +33,7 @@ export function useChatRun(chatId: string) {
 
         if (data.status === 'success') {
           setStatus('success')
+          setPendingMessage(null)
           stopPolling()
           queryClient.invalidateQueries({ queryKey: ['memory', 'messages', chatId] })
           return
@@ -40,6 +42,7 @@ export function useChatRun(chatId: string) {
         // All terminal non-success statuses: failed, tripwire, canceled, bailed, suspended
         if (data.status && data.status !== 'running' && data.status !== 'waiting' && data.status !== 'pending' && data.status !== 'paused') {
           setStatus('failed')
+          setPendingMessage(null)
           const errMsg =
             typeof data.error === 'string'
               ? data.error
@@ -92,6 +95,7 @@ export function useChatRun(chatId: string) {
         if (!res.ok) throw new Error('Failed to send')
 
         const { runId: newRunId } = await res.json()
+        setPendingMessage(message)
         startPolling(newRunId)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to send message')
@@ -108,6 +112,7 @@ export function useChatRun(chatId: string) {
         if (!res.ok) return
         const { activeRun } = await res.json()
         if (activeRun) {
+          if (activeRun.pendingMessage) setPendingMessage(activeRun.pendingMessage)
           startPolling(activeRun.runId)
         }
       } catch {
@@ -123,6 +128,7 @@ export function useChatRun(chatId: string) {
     status,
     error,
     runId,
+    pendingMessage,
     isRunning: status === 'running',
   }
 }

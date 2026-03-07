@@ -12,5 +12,6 @@ export const chats = pgTable('chats', {
   projectId: uuid('project_id').notNull().references(() => projects.id),
   title: text('title'),
   lastRunId: text('last_run_id'),
+  pendingMessage: text('pending_message'),
   createdAt: timestamp('created_at').defaultNow().notNull(),
 })

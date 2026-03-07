@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   // Verify user owns the project
   const [chat] = await db
-    .select({ id: chats.id, lastRunId: chats.lastRunId })
+    .select({ id: chats.id, lastRunId: chats.lastRunId, pendingMessage: chats.pendingMessage })
     .from(chats)
     .innerJoin(projects, eq(chats.projectId, projects.id))
     .where(and(eq(chats.id, chatId), eq(projects.userId, userId)))
@@ -27,7 +27,14 @@ export async function GET(req: NextRequest) {
     const result = await workflow.runById(chat.lastRunId)
 
     if (result?.status === 'running' || result?.status === 'waiting') {
-      return NextResponse.json({ activeRun: { runId: chat.lastRunId, status: result.status } })
+      return NextResponse.json({
+        activeRun: { runId: chat.lastRunId, status: result.status, pendingMessage: chat.pendingMessage },
+      })
+    }
+
+    // Run finished — clear pending state
+    if (chat.pendingMessage) {
+      await db.update(chats).set({ pendingMessage: null }).where(eq(chats.id, chatId))
     }
 
     return NextResponse.json({ activeRun: null })
