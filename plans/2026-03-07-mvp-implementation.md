@@ -538,7 +538,7 @@ git commit -m "feat: add seed script for hardcoded project/chat"
 
 ---
 
-### Task 14: Configure MastraClient
+### ~~Task 14: Configure MastraClient~~ ✅
 
 **Files:**
 - Create: `src/lib/mastra.ts`
