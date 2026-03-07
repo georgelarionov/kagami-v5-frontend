@@ -4,7 +4,7 @@
 
 **Goal:** Working chat app with background agent execution — send message, close tab, come back, see result.
 
-**Architecture:** Two repos (kagami-api, kagami-web). Mastra workflow wraps agent.generate(), BFF polls run status, UI shows complete response. One agent, no streaming, no supervisor.
+**Architecture:** Two repos (kagami-api, kagami-v5-frontend). Mastra workflow wraps agent.generate(), BFF polls run status, UI shows complete response. One agent, no streaming, no supervisor.
 
 **Tech Stack:** Mastra Server + PostgresStore + Memory | Next.js + Clerk + Drizzle + shadcn + react-query | Neon PostgreSQL (pooled) | Railway
 
@@ -305,7 +305,7 @@ git commit -m "feat: add chat-workflow wrapping agent.generate()"
 
 ## Phase 2: kagami-web (Next.js BFF + UI)
 
-### Task 10: Scaffold kagami-web repo
+### ~~Task 10: Scaffold kagami-web repo~~ ✅
 
 **Step 1:** Create repo
 
@@ -345,7 +345,7 @@ git commit -m "chore: scaffold kagami-web with Next.js, Clerk, Drizzle, shadcn"
 
 ---
 
-### Task 11: Configure Clerk auth
+### ~~Task 11: Configure Clerk auth~~ ✅
 
 **Files:**
 - Create: `src/middleware.ts`
