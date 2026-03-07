@@ -474,7 +474,7 @@ git commit -m "feat: add Drizzle schema (projects, chats with lastRunId)"
 
 ---
 
-### Task 13: Seed hardcoded project and chat
+### ~~Task 13: Seed hardcoded project and chat~~ ✅
 
 For MVP: one hardcoded project, one chat. No CRUD UI yet.
 
