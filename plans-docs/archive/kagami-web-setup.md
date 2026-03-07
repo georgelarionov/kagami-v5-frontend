@@ -1,4 +1,6 @@
-# kagami-web Setup Instructions
+# [COMPLETED] kagami-web Setup Instructions
+
+> **Status:** COMPLETED (2026-03-08). Kept for historical reference only.
 
 > Instructions for Claude Code to scaffold and implement kagami-web (Next.js BFF + UI).
 

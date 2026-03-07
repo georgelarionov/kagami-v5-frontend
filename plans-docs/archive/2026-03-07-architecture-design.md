@@ -1,4 +1,6 @@
-# Kagami v5 Architecture Design
+# [COMPLETED] Kagami v5 Architecture Design
+
+> **Status:** COMPLETED (2026-03-08). Kept for historical reference only.
 
 ## Overview
 

@@ -1,4 +1,6 @@
-# Kagami v5 MVP Implementation Plan
+# [COMPLETED] Kagami v5 MVP Implementation Plan
+
+> **Status:** COMPLETED (2026-03-08). Kept for historical reference only.
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
