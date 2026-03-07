@@ -910,7 +910,7 @@ git commit -m "feat: add useChatRun hook with stepped polling"
 
 ---
 
-### Task 17: Build useChatMessages hook
+### ~~Task 17: Build useChatMessages hook~~ ✅
 
 **Files:**
 - Create: `src/hooks/use-chat-messages.ts`
