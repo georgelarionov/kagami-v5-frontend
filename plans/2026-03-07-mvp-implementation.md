@@ -776,7 +776,7 @@ git commit -m "feat: add chat API routes (send, poll, active-run, messages)"
 
 ---
 
-### Task 16: Build useChatRun hook
+### ~~Task 16: Build useChatRun hook~~ ✅
 
 **Files:**
 - Create: `src/hooks/use-chat-run.ts`

@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { chats, projects } from '@/db/schema'
 import { mastraClient } from '@/lib/mastra'
-import { getSnapshotStatus } from '@/lib/workflow-utils'
 import { eq, and } from 'drizzle-orm'
 
 export async function GET(req: NextRequest) {
@@ -26,10 +25,9 @@ export async function GET(req: NextRequest) {
   try {
     const workflow = mastraClient.getWorkflow('chat-workflow')
     const result = await workflow.runById(chat.lastRunId)
-    const status = getSnapshotStatus(result?.snapshot)
 
-    if (status === 'running' || status === 'waiting') {
-      return NextResponse.json({ activeRun: { runId: chat.lastRunId, status } })
+    if (result?.status === 'running' || result?.status === 'waiting') {
+      return NextResponse.json({ activeRun: { runId: chat.lastRunId, status: result.status } })
     }
 
     return NextResponse.json({ activeRun: null })

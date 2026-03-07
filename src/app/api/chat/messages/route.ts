@@ -10,9 +10,9 @@ export async function GET(req: NextRequest) {
   if (!chatId) return NextResponse.json({ error: 'Missing chatId' }, { status: 400 })
 
   try {
-    const thread = mastraClient.getMemoryThread(chatId, 'kagamiAgent')
-    const result = await thread.getMessages()
-    return NextResponse.json({ messages: result.uiMessages })
+    const thread = mastraClient.getMemoryThread({ threadId: chatId, agentId: 'kagamiAgent' })
+    const result = await thread.listMessages()
+    return NextResponse.json({ messages: result.messages })
   } catch {
     return NextResponse.json({ messages: [] })
   }

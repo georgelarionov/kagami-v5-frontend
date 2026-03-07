@@ -3,7 +3,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/db'
 import { chats, projects } from '@/db/schema'
 import { mastraClient } from '@/lib/mastra'
-import { getSnapshotStatus } from '@/lib/workflow-utils'
 import { eq, and } from 'drizzle-orm'
 
 export async function POST(req: NextRequest) {
@@ -28,8 +27,7 @@ export async function POST(req: NextRequest) {
     const workflow = mastraClient.getWorkflow('chat-workflow')
     try {
       const existing = await workflow.runById(chat.lastRunId)
-      const status = getSnapshotStatus(existing?.snapshot)
-      if (status === 'running' || status === 'waiting') {
+      if (existing?.status === 'running' || existing?.status === 'waiting') {
         return NextResponse.json({ error: 'Active run exists' }, { status: 409 })
       }
     } catch {
@@ -43,7 +41,7 @@ export async function POST(req: NextRequest) {
 
   // Create run
   const workflow = mastraClient.getWorkflow('chat-workflow')
-  const run = await workflow.createRunAsync()
+  const run = await workflow.createRun()
 
   // Save-before-start: save runId first
   await db.update(chats).set({ lastRunId: run.runId }).where(eq(chats.id, chatId))
