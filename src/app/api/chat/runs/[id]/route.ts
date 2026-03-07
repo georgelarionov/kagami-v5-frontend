@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/db'
+import { getDb } from '@/db'
 import { chats, projects } from '@/db/schema'
 import { mastraClient } from '@/lib/mastra'
 import { eq, and } from 'drizzle-orm'
@@ -17,7 +17,7 @@ export async function GET(
   if (!chatId) return NextResponse.json({ error: 'Missing chatId' }, { status: 400 })
 
   // Verify user owns project AND run belongs to this chat
-  const [chat] = await db
+  const [chat] = await getDb()
     .select({ id: chats.id, lastRunId: chats.lastRunId })
     .from(chats)
     .innerJoin(projects, eq(chats.projectId, projects.id))

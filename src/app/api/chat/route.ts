@@ -1,6 +1,6 @@
 import { auth } from '@clerk/nextjs/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { db } from '@/db'
+import { getDb } from '@/db'
 import { chats, projects } from '@/db/schema'
 import { mastraClient } from '@/lib/mastra'
 import { eq, and } from 'drizzle-orm'
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   }
 
   // Get chat + verify user owns the project
-  const [chat] = await db
+  const [chat] = await getDb()
     .select({ id: chats.id, lastRunId: chats.lastRunId, projectId: chats.projectId })
     .from(chats)
     .innerJoin(projects, eq(chats.projectId, projects.id))
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
   const run = await workflow.createRun({ resourceId })
 
   // Save-before-start: save runId + pending message
-  await db.update(chats).set({ lastRunId: run.runId, pendingMessage: message }).where(eq(chats.id, chatId))
+  await getDb().update(chats).set({ lastRunId: run.runId, pendingMessage: message }).where(eq(chats.id, chatId))
 
   // Start run (fire-and-forget — resolves once start request is sent)
   try {
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
     })
   } catch {
     // Start failed — clean up
-    await db.update(chats).set({ lastRunId: null, pendingMessage: null }).where(eq(chats.id, chatId))
+    await getDb().update(chats).set({ lastRunId: null, pendingMessage: null }).where(eq(chats.id, chatId))
     return NextResponse.json({ error: 'Failed to start run' }, { status: 500 })
   }
 
