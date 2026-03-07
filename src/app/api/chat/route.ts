@@ -46,6 +46,7 @@ export async function POST(req: NextRequest) {
   const threadId = chatId
 
   // Create run
+  console.log('[chat] creating run with resourceId:', resourceId, 'threadId:', threadId, 'MASTRA_API_URL:', process.env.MASTRA_API_URL)
   const workflow = mastraClient.getWorkflow('chat-workflow')
   const run = await workflow.createRun({ resourceId })
 
