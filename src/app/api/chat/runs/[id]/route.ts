@@ -31,11 +31,9 @@ export async function GET(
     const result = await workflow.runById(runId)
     const status = result?.status
     const error = status === 'failed' ? result?.error : undefined
-    console.log('[run poll]', runId, 'status:', status, 'error:', error, 'result keys:', result ? Object.keys(result) : 'null')
 
     return NextResponse.json({ runId, status, error })
-  } catch (err) {
-    console.error('[run poll] error:', runId, err)
+  } catch {
     return NextResponse.json({ error: 'Run not found' }, { status: 404 })
   }
 }

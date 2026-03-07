@@ -24,10 +24,8 @@ export async function GET(req: NextRequest) {
     const thread = mastraClient.getMemoryThread({ threadId: chatId, agentId: 'kagamiAgent' })
     // Fetch all messages by requesting a large page size
     const result = await thread.listMessages({ perPage: 1000 })
-    console.log('[messages] threadId:', chatId, 'count:', result.messages?.length)
     return NextResponse.json({ messages: result.messages })
-  } catch (err) {
-    console.error('[messages] error:', err)
+  } catch {
     return NextResponse.json({ messages: [] })
   }
 }

@@ -60,7 +60,7 @@ src/
     ui/                 # shadcn components (do not edit manually)
   db/
     schema.ts           # Drizzle schema: projects, chats (incl. pendingMessage)
-    index.ts            # Drizzle client (neon-http driver)
+    index.ts            # Drizzle client (neon-http driver, lazy init via getDb())
     seed.ts             # One-time seed: default project + chat
   hooks/
     use-chat-run.ts     # Send message, poll run, retry, check active-run on mount
@@ -112,11 +112,14 @@ The BFF uses `@mastra/client-js` to communicate with Mastra Server:
 - `run.start({ inputData })` — start execution
 - `workflow.runById(runId)` — check run status
 - `mastraClient.getMemoryThread({ threadId, agentId: 'kagamiAgent' })` — get memory thread
-- `thread.listMessages()` — read message history
+- `thread.listMessages({ perPage: 1000 })` — read message history (default perPage is 40, must override)
 
 ## Railway Deployment
 
 Both services in the same Railway project for private networking:
-- kagami-api: internal only (no public domain)
-- kagami-web: public domain for users
+- kagami-api (`kagami-v5`): internal only (no public domain), Mastra listens on port 8080
+- kagami-web (`kagami-v5-frontend`): public domain for users
 - `MASTRA_API_URL=http://kagami-v5.railway.internal:8080` (private networking requires explicit port — no proxying)
+- `DATABASE_URL` must be Neon pooled PostgreSQL string (not Mastra URL)
+- Railway does NOT proxy ports on private domains — always specify the actual port
+- Drizzle uses lazy init (`getDb()`) to avoid build-time crashes when `DATABASE_URL` is unavailable

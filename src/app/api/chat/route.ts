@@ -46,22 +46,18 @@ export async function POST(req: NextRequest) {
   const threadId = chatId
 
   // Create run
-  console.log('[chat] creating run with resourceId:', resourceId, 'threadId:', threadId, 'MASTRA_API_URL:', process.env.MASTRA_API_URL)
   const workflow = mastraClient.getWorkflow('chat-workflow')
   const run = await workflow.createRun({ resourceId })
-  console.log('[chat] run created:', run.runId)
 
   // Save-before-start: save runId + pending message
   await getDb().update(chats).set({ lastRunId: run.runId, pendingMessage: message }).where(eq(chats.id, chatId))
 
   // Start run (fire-and-forget — resolves once start request is sent)
   try {
-    const startResult = await run.start({
+    await run.start({
       inputData: { message, threadId, resourceId },
     })
-    console.log('[chat] run.start() result:', JSON.stringify(startResult)?.slice(0, 500))
-  } catch (err) {
-    console.error('[chat] run.start() failed:', err)
+  } catch {
     // Start failed — clean up
     await getDb().update(chats).set({ lastRunId: null, pendingMessage: null }).where(eq(chats.id, chatId))
     return NextResponse.json({ error: 'Failed to start run' }, { status: 500 })
