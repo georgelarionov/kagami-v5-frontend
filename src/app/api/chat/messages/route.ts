@@ -21,9 +21,12 @@ export async function GET(req: NextRequest) {
   if (!chat) return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
 
   try {
-    const thread = mastraClient.getMemoryThread({ threadId: chatId, agentId: 'kagamiAgent' })
-    // Fetch all messages by requesting a large page size
-    const result = await thread.listMessages({ perPage: 1000 })
+    const thread = mastraClient.getMemoryThread({ threadId: chatId, agentId: 'kagami-agent' })
+    const result = await thread.listMessages({
+      page: 0,
+      perPage: 50,
+      orderBy: { field: 'createdAt', direction: 'ASC' },
+    })
     return NextResponse.json({ messages: result.messages })
   } catch {
     return NextResponse.json({ messages: [] })

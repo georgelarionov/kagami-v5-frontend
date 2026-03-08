@@ -143,3 +143,5 @@ vite.config.ts.timestamp-*
 
 # Worktrees
 .worktrees/
+# clerk configuration (can include secrets)
+/.clerk/
