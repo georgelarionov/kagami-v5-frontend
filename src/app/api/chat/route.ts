@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
   await getDb().update(chats).set({ pendingMessage: userText }).where(eq(chats.id, chatId))
 
   // Stream from Mastra — TODO(F6): add X-Project-Id header to MastraClient
-  const agent = mastraClient.getAgent('kagami-agent')
+  const agent = mastraClient.getAgent('kagami-supervisor')
 
   let response: Awaited<ReturnType<typeof agent.stream>>
   try {

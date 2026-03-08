@@ -4,12 +4,29 @@ import { useCallback, useEffect, useRef } from 'react'
 import { Message, MessageContent } from '@/components/ui/message'
 import { Tool } from '@/components/ui/tool'
 import type { ToolPart } from '@/components/ui/tool'
+import { DelegationStep } from '@/components/chat/delegation-step'
 import { Button } from '@/components/ui/button'
 import { Loader2, ChevronUp } from 'lucide-react'
 import type { UIMessage } from 'ai'
+import type { DelegationPart } from '@/types/chat'
+
+function isDelegationPart(part: { type: string }): boolean {
+  return part.type.startsWith('tool-agent-')
+}
+
+// Human-readable agent names (hardcoded for MVP, replaced by registry in F7)
+const AGENT_DISPLAY_NAMES: Record<string, string> = {
+  'researchAgent': 'Research Agent',
+  'writerAgent': 'Writer Agent',
+}
+
+function getAgentDisplayName(part: { type: string }): string {
+  const agentKey = part.type.replace(/^tool-agent-/, '')
+  return AGENT_DISPLAY_NAMES[agentKey] ?? agentKey
+}
 
 function isToolPart(part: { type: string }): boolean {
-  return part.type.startsWith('tool-')
+  return part.type.startsWith('tool-') && !part.type.startsWith('tool-agent-')
 }
 
 interface MessageListProps {
@@ -112,6 +129,18 @@ export function MessageList({
                     >
                       {part.text}
                     </MessageContent>
+                  )
+                }
+                if (isDelegationPart(part)) {
+                  const p = part as unknown as DelegationPart
+                  return (
+                    <DelegationStep
+                      key={`${msg.id}-delegation-${p.toolCallId}`}
+                      agentName={getAgentDisplayName(part)}
+                      state={p.state}
+                      output={p.output}
+                      errorText={p.errorText}
+                    />
                   )
                 }
                 if (isToolPart(part)) {

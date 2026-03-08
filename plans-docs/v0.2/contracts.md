@@ -6,16 +6,16 @@
 
 ### Agent
 
-- **Agent ID:** `kagami-agent` (свойство `id` в Agent constructor)
+- **Agent ID:** `kagami-supervisor` (свойство `id` в Agent constructor, изменён в F4)
 - **Registration key:** `kagamiAgent` (ключ в `agents: { kagamiAgent }`)
-- **HTTP endpoint:** `POST /api/agents/kagami-agent/stream`
+- **HTTP endpoint:** `POST /api/agents/kagami-supervisor/stream`
 
 ### Streaming (BFF → Mastra Server)
 
 ```typescript
 // MastraClient вызов из BFF
 const client = new MastraClient({ baseUrl: process.env.MASTRA_API_URL })
-const agent = client.getAgent('kagami-agent')
+const agent = client.getAgent('kagami-supervisor')
 
 const stream = await agent.stream(userMessageText, {
   memory: {
@@ -43,7 +43,7 @@ const stream = await agent.stream(userMessageText, {
 ```typescript
 const thread = client.getMemoryThread({
   threadId: chatId,
-  agentId: 'kagami-agent',
+  agentId: 'kagami-supervisor',
 })
 
 const result = await thread.listMessages({
@@ -129,3 +129,39 @@ GET /api/chat/messages?chatId={chatId}&page={page}&perPage={perPage}
 - page=1, 2... — более ранние сообщения (по кнопке "Загрузить ранние")
 - Склейка: `[...pages].reverse().flatMap(p => p.messages)` → хронологический порядок
 - Кнопка "Загрузить ранние" заблокирована при стриминге (`status !== 'ready'`)
+
+---
+
+## F4: Supervisor Agent
+
+### Agent
+
+- **Agent ID:** `kagami-supervisor` (свойство `id` в Agent constructor)
+- **Registration key:** `kagamiAgent` (ключ в `agents: { kagamiAgent: supervisorAgent }`)
+- **HTTP endpoint:** `POST /api/agents/kagami-supervisor/stream`
+- **`defaultOptions: { maxSteps: 10 }`** — задан в определении агента, BFF override не обязателен
+- **Tools:** `researchTool` (Perplexity Sonar) — доступен supervisor'у напрямую
+
+### Sub-agents
+
+| Sub-agent | ID | Delegation tool name |
+|---|---|---|
+| Research Agent | `research-agent` | `agent-researchAgent` |
+| Writer Agent | `writer-agent` | `agent-writerAgent` |
+
+- Суб-агенты без Memory — контекст через delegation message от supervisor'а
+- Delegation tool names автоматически генерируются Mastra из ключей в `agents: { researchAgent, writerAgent }`
+
+### Delegation в стриме
+
+Делегирование приходит как tool call parts в `message.parts`:
+- `type: 'tool-agent-researchAgent'` / `type: 'tool-agent-writerAgent'`
+- Состояния: `input-streaming` → `input-available` → `output-available` (или `output-error`)
+- `input`: сообщение supervisor'а к суб-агенту
+- `output`: ответ суб-агента
+
+### Фронтенд — отображение
+
+- Delegation parts (`tool-agent-*`) отображаются как `DelegationStep` (Steps из prompt-kit)
+- Обычные tool parts (`tool-*` без `agent-` prefix) отображаются как `Tool` (F3)
+- Порядок проверок: `isDelegationPart()` перед `isToolPart()`

@@ -111,7 +111,7 @@ The BFF uses `@mastra/client-js` to communicate with Mastra Server:
 - `workflow.createRun({ resourceId })` — create a new run (resourceId required)
 - `run.start({ inputData })` — start execution
 - `workflow.runById(runId)` — check run status
-- `mastraClient.getMemoryThread({ threadId, agentId: 'kagamiAgent' })` — get memory thread
+- `mastraClient.getMemoryThread({ threadId, agentId: 'kagami-supervisor' })` — get memory thread
 - `thread.listMessages({ perPage: 1000 })` — read message history (default perPage is 40, must override)
 
 ## Contracts
