@@ -49,12 +49,25 @@ const thread = client.getMemoryThread({
 const result = await thread.listMessages({
   page: 0,
   perPage: 50,
-  orderBy: { field: 'createdAt', direction: 'ASC' },
+  orderBy: { field: 'createdAt', direction: 'DESC' },
 })
-// result.messages, result.total, result.hasMore
 ```
 
-### BFF → Browser
+**Ответ `listMessages()`:**
+```typescript
+{
+  messages: MastraDBMessage[] // массив сообщений
+  total: number              // общее количество сообщений в треде
+  hasMore: boolean           // есть ли ещё страницы
+}
+```
+
+**Параметры пагинации:**
+- `page` — номер страницы (0-indexed)
+- `perPage` — количество на странице (`number`) или `false` для загрузки всех
+- `orderBy` — `{ field: 'createdAt', direction: 'ASC' | 'DESC' }`
+
+### BFF → Browser (streaming)
 
 - Формат: AI SDK UIMessageStream (SSE)
 - Конвертация: `toAISdkStream()` из `@mastra/ai-sdk`
@@ -72,3 +85,47 @@ const result = await thread.listMessages({
 
 - BFF проверяет `pendingMessage IS NOT NULL` → возвращает `409 Conflict`
 - Клиент: disable send при `status !== 'ready'`
+
+---
+
+## F2: Пагинация сообщений
+
+### BFF endpoint (Browser → BFF)
+
+```
+GET /api/chat/messages?chatId={chatId}&page={page}&perPage={perPage}
+```
+
+**Query параметры:**
+| Параметр | Тип | Обязательный | Дефолт | Ограничение |
+|----------|-----|:---:|--------|-------------|
+| `chatId` | string | да | — | — |
+| `page` | number | нет | `0` | >= 0 |
+| `perPage` | number | нет | `50` | 1–100 |
+
+**Ответ (200):**
+```json
+{
+  "messages": [],
+  "hasMore": true
+}
+```
+
+**Ошибки:**
+- `401` — не авторизован
+- `400` — отсутствует `chatId`
+- `404` — чат не найден / не принадлежит пользователю
+
+### Логика пагинации (BFF)
+
+1. BFF запрашивает Mastra с `orderBy: DESC` — page=0 возвращает **последние** N сообщений
+2. Перед отдачей клиенту — `reverse()` в хронологический порядок (ASC)
+3. `hasMore` берётся из ответа `listMessages()` (поле `hasMore`)
+
+### Фронтенд
+
+- `useInfiniteQuery` с ключом `['memory', 'messages', chatId]`
+- page=0 — последние 50 (initial load)
+- page=1, 2... — более ранние сообщения (по кнопке "Загрузить ранние")
+- Склейка: `[...pages].reverse().flatMap(p => p.messages)` → хронологический порядок
+- Кнопка "Загрузить ранние" заблокирована при стриминге (`status !== 'ready'`)
