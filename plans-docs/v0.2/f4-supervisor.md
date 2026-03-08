@@ -1,9 +1,11 @@
-# F4. Supervisor Agent — План реализации
+# F4. Supervisor Agent — План реализации ✅ COMPLETE
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 > Замена одного агента на supervisor, который делегирует задачи специализированным суб-агентам.
 > Зависит от F1 (стриминг работает). F3 (tool display) обрабатывает tool parts — делегирование приходит через тот же механизм.
+>
+> **Completed:** 2026-03-08. Merged to main in both repos.
 
 **Scope:** бэкенд (создание supervisor + суб-агентов) + минимальные изменения фронтенда (maxSteps + отображение делегирования).
 
