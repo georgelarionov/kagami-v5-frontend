@@ -1,5 +1,7 @@
 # F7+F8. Стандарт реестра + Управление историей — План реализации
 
+> **Status: COMPLETE** (frontend merged to main 2026-03-08). Known bug: DELETE /memory/deleteMessages → 404, tracked in `plans-docs/v0.3/clear-memory.md`.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 > Две фичи, объединённые в один документ.
