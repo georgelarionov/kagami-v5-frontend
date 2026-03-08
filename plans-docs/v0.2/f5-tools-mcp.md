@@ -1,4 +1,4 @@
-# F5. Тулы и MCP-интеграция — План реализации
+# F5. Тулы и MCP-интеграция — План реализации ✅ COMPLETE
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -37,6 +37,8 @@ export const myTool = createTool({
 - `outputSchema` — Zod-схема результата (валидация)
 - `execute` — async функция: `async (inputData, context) => {}`. Первый параметр — валидированные данные из `inputSchema`. Второй — опциональный `context` с `requestContext`, `agent`, `mcp` и др. (используется в F6 для per-project config)
 
+> **Альтернатива `MCPClient`:** `MastraMCPClient` — для подключения одного MCP-сервера напрямую (без namespace). В F5 используем `MCPClient` — поддерживает несколько серверов с автоматическим namespace.
+
 ### MCPClient
 
 MCP-серверы подключаются через `MCPClient` из `@mastra/mcp`:
@@ -72,7 +74,7 @@ const tools = await mcp.listTools()
 - **Supervisor** НЕ получает тулы напрямую — делегирует суб-агентам (auto-generated `agent-*` tools)
 - Суб-агентам с тулами нужен `defaultOptions: { maxSteps: N }` где N > 1 — иначе агент вызовет тул, но не обработает результат (дефолт maxSteps = 1, это один шаг = один tool call без обработки ответа)
 - Комбинирование: `tools: { ...customTools, ...mcpTools }` — spread кастомных и MCP-тулов в один map
-- **Коллизии ключей:** при spread duplicate keys молча перезаписываются. При добавлении новых кастомных тулов проверять что ключ не совпадает с MCP-namespaced ключом (e.g. не называть кастомный тул `braveSearch_web_search`)
+- **Коллизии ключей:** при spread duplicate keys молча перезаписываются. При добавлении новых кастомных тулов проверять что ключ не совпадает с MCP-namespaced ключом (e.g. не называть кастомный тул `apify_*`)
 
 ### Видимость tool calls суб-агентов в стриме
 
@@ -96,17 +98,17 @@ const tools = await mcp.listTools()
 
 ### MCP-серверы
 
-| Server ID | Агент | Пакет | Описание |
+| Server ID | Агент | Транспорт | Описание |
 |---|---|---|---|
-| `braveSearch` | researchAgent | `@modelcontextprotocol/server-brave-search` | Поиск в интернете |
+| `apify` | researchAgent | HTTP/SSE (`https://mcp.apify.com/sse`) | Apify Actors — веб-поиск, скрейпинг, извлечение данных |
 
-Brave Search — наиболее полезен для research-агента. Требует `BRAVE_API_KEY` (бесплатный ключ на brave.com/search/api).
+Apify MCP — hosted MCP-сервер с доступом к 3000+ Actors из Apify Store. Research-агент получает web search (RAG Web Browser), скрейпинг, извлечение данных с сайтов. Требует `APIFY_TOKEN` (бесплатный аккаунт на apify.com).
 
 ### Распределение по агентам
 
 | Агент | Кастомные тулы | MCP-тулы | maxSteps |
 |---|---|---|---|
-| researchAgent | `getCurrentDatetime` | `braveSearch_*` | 5 |
+| researchAgent | `getCurrentDatetime` | `apify_*` | 5 |
 | writerAgent | — | — | 1 (дефолт) |
 | supervisorAgent | — (делегирует) | — | 10 (из F4) |
 
@@ -211,12 +213,14 @@ import { MCPClient } from '@mastra/mcp'
 
 export const mcpClient = new MCPClient({
   servers: {
-    braveSearch: {
-      command: 'npx',
-      args: ['-y', '@modelcontextprotocol/server-brave-search'],
-      env: {
-        BRAVE_API_KEY: process.env.BRAVE_API_KEY!,
+    apify: {
+      url: new URL('https://mcp.apify.com/sse'),
+      requestInit: {
+        headers: {
+          Authorization: `Bearer ${process.env.APIFY_TOKEN}`,
+        },
       },
+      timeout: 300_000, // 5 минут — Apify Actors могут выполняться долго
     },
   },
 })
@@ -225,31 +229,33 @@ export let mcpTools: Record<string, any> = {}
 try {
   mcpTools = await mcpClient.listTools()
 } catch (error) {
-  console.error('[MCP] Failed to initialize Brave Search tools:', error)
-  // Server continues without MCP tools — agent works but can't search
+  console.error('[MCP] Failed to initialize Apify tools:', error)
+  // Server continues without MCP tools — agent works but can't search/scrape
 }
 ```
 
 > **Top-level `await`** — стандартный паттерн Mastra (ESM с поддержкой TLA). Тулы резолвятся один раз при старте сервера.
 >
-> **Error handling:** `try/catch` предотвращает crash всего Mastra-сервера при ошибке MCP (отсутствующий API key, network error, невалидный пакет). Агент продолжает работать без MCP-тулов — кастомные тулы остаются доступны.
+> **Error handling:** `try/catch` предотвращает crash всего Mastra-сервера при ошибке MCP (отсутствующий token, network error). Агент продолжает работать без MCP-тулов — кастомные тулы остаются доступны.
 >
-> `listTools()` возвращает `Record<string, Tool>` с namespace: `braveSearch_web_search`, `braveSearch_local_search` и т.д.
+> `listTools()` возвращает `Record<string, Tool>` с namespace: `apify_*` (e.g. `apify_rag-web-browser`, `apify_web-scraper` и т.д.).
 >
-> **Пакет:** `@modelcontextprotocol/server-brave-search` — проверить актуальное имя в npm при реализации. Альтернатива: `@anthropic-ai/mcp-server-brave-search`.
+> **HTTP/SSE транспорт** (`url`): hosted MCP-сервер Apify. Не требует установки npm-пакетов — нет дочерних процессов, нет cold start. Авторизация через `Bearer` token в заголовках.
 >
-> **stdio транспорт** (`command` + `args`): MCP-сервер запускается как дочерний процесс. Работает локально и на Railway. `npx -y` скачивает пакет при первом запуске — для production рассмотреть установку как dependency (см. Открытые вопросы).
+> **Timeout 300_000 (5 мин):** Apify Actors (скрейпинг, RAG) могут работать дольше чем простой API-вызов. Увеличенный timeout предотвращает преждевременный abort.
+>
+> **Проверить при реализации:** точную конфигурацию `requestInit` для `MCPClient` HTTP-транспорта. Если `MCPClient` не поддерживает `requestInit` — использовать `MastraMCPClient` напрямую или передать auth через query params (`?token=...`).
 
 ### Шаг 2.2 — Environment variables
 
 **Добавить в `.env`** (kagami-api):
 ```bash
-BRAVE_API_KEY=your-brave-api-key
+APIFY_TOKEN=your-apify-api-token
 ```
 
-**Railway:** добавить `BRAVE_API_KEY` в переменные окружения сервиса `kagami-v5`.
+**Railway:** добавить `APIFY_TOKEN` в переменные окружения сервиса `kagami-v5`.
 
-> Получить бесплатный API ключ: https://brave.com/search/api
+> Получить бесплатный API токен: https://console.apify.com/account/integrations
 
 ---
 
@@ -267,10 +273,10 @@ import { mcpTools } from '../mcp'
 export const researchAgent = new Agent({
   id: 'research-agent',
   name: 'Research Agent',
-  description: 'Gathers information, analyzes data, and returns structured summaries. Has access to web search and utility tools. Use for factual questions, research tasks, and data analysis.',
+  description: 'Gathers information, analyzes data, and returns structured summaries. Has access to Apify web search/scraping and utility tools. Use for factual questions, research tasks, data analysis, and extracting information from websites.',
   instructions: `You are a research specialist. Your role:
 - Gather and analyze information based on the request
-- Use web search to find current information when needed
+- Use Apify tools (web search, scraping) to find current information when needed
 - Use the datetime tool when you need to know current date/time
 - Return structured, factual summaries with bullet points
 - Be thorough but concise
@@ -284,13 +290,13 @@ export const researchAgent = new Agent({
 })
 ```
 
-> **`tools: { ...customTools, ...mcpTools }`** — spread кастомных и MCP-тулов в один map. Research agent видит все тулы.
+> **`tools: { ...customTools, ...mcpTools }`** — spread кастомных и MCP-тулов в один map. Research agent видит все тулы (custom + Apify).
 >
 > **`maxSteps: 5`** — research agent может: (1) вызвать тул → (2) обработать результат → (3) вызвать ещё тул → ... → (5) сформировать ответ. Без maxSteps > 1 агент вызовет тул, но не сможет обработать результат (останавливается после 1 шага).
 >
-> **`description` обновлён** — упоминает доступные инструменты. Supervisor использует description для принятия решения о делегировании.
+> **`description` обновлён** — упоминает Apify и доступные инструменты. Supervisor использует description для принятия решения о делегировании.
 >
-> **`instructions` обновлены** — явно указывают когда использовать тулы. Помогает LLM принимать решения о вызове.
+> **`instructions` обновлены** — явно указывают когда использовать Apify тулы. Помогает LLM принимать решения о вызове.
 
 ### Шаг 3.2 — writer-agent (без изменений)
 
@@ -308,7 +314,7 @@ Writer agent специализируется на генерации текст
 instructions: `You are Kagami, an intelligent assistant that coordinates specialized agents to help users.
 
 Available agents:
-- researchAgent: Gathers information, analyzes data, returns structured summaries. Has web search and utility tools. Use for factual questions, research, analysis, and any request requiring current or external information.
+- researchAgent: Gathers information, analyzes data, returns structured summaries. Has Apify (web search, scraping) and utility tools. Use for factual questions, research, analysis, and any request requiring current or external information.
 - writerAgent: Creates polished content, formats text, writes documents. Use for writing, editing, and formatting tasks.
 
 Delegation strategy:
@@ -326,7 +332,7 @@ Guidelines:
 - Keep responses concise and well-formatted`,
 ```
 
-> **Изменения vs F4:** обновлено описание researchAgent (упоминает тулы), добавлен пункт 5 (current date/time/real-time data → researchAgent).
+> **Изменения vs F4:** обновлено описание researchAgent (упоминает Apify тулы), добавлен пункт 5 (current date/time/real-time data → researchAgent).
 >
 > Остальные части supervisor'а (`agents`, `defaultOptions`, `memory`) — без изменений.
 
@@ -339,8 +345,8 @@ Guidelines:
 Добавить контракты F5:
 - Custom tool IDs: `get-current-datetime`
 - Custom tool keys (в стриме): `getCurrentDatetime` → `tool-getCurrentDatetime`
-- MCP server ID: `braveSearch`
-- MCP tool namespace: `braveSearch_*` (e.g. `braveSearch_web_search`)
+- MCP server ID: `apify`
+- MCP tool namespace: `apify_*` (e.g. `apify_rag-web-browser`, `apify_web-scraper`)
 - Tool assignment: researchAgent = all tools, writerAgent = none, supervisor = none (delegates)
 - Research agent maxSteps: 5
 - Tool name convention: NO `agent-` prefix (collision with delegation detection in F4)
@@ -363,9 +369,9 @@ npm run dev
 - [ ] "What time is it now?" → supervisor делегирует researchAgent → вызывает `getCurrentDatetime` → возвращает время
 - [ ] "What is today's date in Europe/Berlin timezone?" → вызывает `getCurrentDatetime` с `timezone: "Europe/Berlin"`
 
-**MCP-тулы (Brave Search):**
-- [ ] "Search for latest AI news" → supervisor делегирует researchAgent → вызывает `braveSearch_web_search`
-- [ ] "Find information about Mastra framework" → research agent использует web search, цитирует источники
+**MCP-тулы (Apify):**
+- [ ] "Search for latest AI news" → supervisor делегирует researchAgent → вызывает Apify web search tool
+- [ ] "Find information about Mastra framework" → research agent использует Apify для поиска, цитирует источники
 
 **Без тулов:**
 - [ ] "Hello, how are you?" → supervisor отвечает напрямую (без делегирования)
@@ -375,10 +381,10 @@ npm run dev
 - [ ] "Search for latest trends in AI and write a summary article" → research (search) → writer (content)
 
 **Ошибки:**
-- [ ] Пустой или невалидный `BRAVE_API_KEY` → research agent получает ошибку от MCP → корректно обрабатывается, возвращает текстовый ответ об ошибке
+- [ ] Пустой или невалидный `APIFY_TOKEN` → research agent получает ошибку от MCP → корректно обрабатывается, возвращает текстовый ответ об ошибке
 
 **Тулы в Mastra Studio:**
-- [ ] Agents → research-agent → Tools: видны `getCurrentDatetime` + `braveSearch_*`
+- [ ] Agents → research-agent → Tools: видны `getCurrentDatetime` + `apify_*`
 - [ ] Agents → writer-agent → Tools: пусто
 - [ ] Agents → kagami-agent (supervisor) → Tools: видны `agent-researchAgent`, `agent-writerAgent` (auto-generated delegation tools)
 
@@ -388,7 +394,7 @@ npm run dev
 
 **Изменений нет.** Tool calls отображаются через F3 (prompt-kit `Tool` компонент):
 - Кастомные тулы: `tool-getCurrentDatetime` → сворачиваемый Tool block с именем и JSON результатом
-- MCP-тулы: `tool-braveSearch_web_search` → аналогично
+- MCP-тулы: `tool-apify_*` → аналогично
 
 > **Оговорка:** если tool calls суб-агентов не проходят через supervisor stream (nested execution), они не будут видны в UI. В этом случае пользователь видит только delegation events (F4: "Research Agent..." → зелёная галочка) и финальный синтезированный ответ supervisor'а. Для MVP это допустимо.
 
@@ -399,8 +405,8 @@ npm run dev
 ### Бэкенд
 - [ ] `npm install @mastra/mcp` — пакет установлен без ошибок
 - [ ] `get-current-datetime` тул создан, возвращает корректное время
-- [ ] `braveSearch` MCP-сервер подключается и возвращает тулы через `listTools()`
-- [ ] Research agent видит все тулы (custom + MCP) в Mastra Studio
+- [ ] Apify MCP-сервер подключается по HTTP/SSE и возвращает тулы через `listTools()`
+- [ ] Research agent видит все тулы (custom + Apify MCP) в Mastra Studio
 - [ ] Writer agent без тулов
 - [ ] Supervisor делегирует research-агенту для tool-based задач
 - [ ] Research agent корректно вызывает тулы и обрабатывает результаты (`maxSteps: 5`)
@@ -420,15 +426,15 @@ npm run dev
 
 1. **Какие кастомные тулы создаём** → `get-current-datetime` — минимальный набор для проверки паттерна `createTool()`. Дополнительные тулы добавляются по F7 конвенциям (один файл на тул + регистрация в index + TOOL_REGISTRY).
 
-2. **Какие MCP-серверы подключаем** → Brave Search (web search). Наиболее полезен для research-агента — даёт доступ к актуальной информации из интернета. Требует `BRAVE_API_KEY` (бесплатный). Альтернативы для будущего: `@modelcontextprotocol/server-fetch` (загрузка страниц), Wikipedia MCP и др.
+2. **Какие MCP-серверы подключаем** → Apify MCP (hosted, HTTP/SSE). Наиболее полезен для research-агента — даёт доступ к 3000+ Actors: веб-поиск (RAG Web Browser), скрейпинг, извлечение данных. Hosted сервер — не нужен npm-пакет, нет дочерних процессов, нет cold start. Требует `APIFY_TOKEN` (бесплатный аккаунт). Альтернативы для будущего: `@modelcontextprotocol/server-fetch` (загрузка страниц), Wikipedia MCP и др.
 
 3. **Распределение тулов по суб-агентам** → Жёсткое, по специализации. Research agent = все тулы (сбор информации — его задача). Writer agent = без тулов (генерация текста из предоставленных данных). Supervisor = без тулов (делегирует). При добавлении тула для writer'а (e.g. grammar checker) — добавить по тому же паттерну.
 
 4. **maxSteps суб-агентов с тулами** → Research agent: `defaultOptions: { maxSteps: 5 }`. Необходим для цикла: вызвать тул → получить результат → обработать → (опционально) вызвать ещё тул → сформировать ответ. Без `maxSteps > 1` агент вызывает тул, но не может обработать результат (дефолт = 1 шаг). Writer agent: без изменений (`maxSteps: 1`, тулов нет). Supervisor: `maxSteps: 10` (из F4, без изменений).
 
-5. **Именование тулов** → Кастомные: camelCase ключ в exports (`getCurrentDatetime`). MCP: автоматический namespace `serverName_toolName` (`braveSearch_web_search`). Ни один не начинается с `agent-` — нет коллизии с F4 `isDelegationPart()` (`tool-agent-*`).
+5. **Именование тулов** → Кастомные: camelCase ключ в exports (`getCurrentDatetime`). MCP: автоматический namespace `serverName_toolName` (`apify_*`). Ни один не начинается с `agent-` — нет коллизии с F4 `isDelegationPart()` (`tool-agent-*`).
 
-6. **Top-level await для MCPClient** → Стандартный паттерн Mastra (ESM + top-level await). `await mcpClient.listTools()` резолвится один раз при старте сервера. Тулы статические на уровне F5 — не меняются per-request. Для динамических тулов per-project (F6) — использовать `toolsets` API или `tools: ({ requestContext }) => ...`.
+6. **Top-level await для MCPClient** → Стандартный паттерн Mastra (ESM + top-level await). `await mcpClient.listTools()` резолвится один раз при старте сервера. Тулы статические на уровне F5 — не меняются per-request. Для динамических тулов per-project (F6) — использовать `toolsets` API или `tools: ({ requestContext }) => ...`. HTTP/SSE транспорт Apify — не требует дочерних процессов.
 
 7. **Supervisor и тулы** → Supervisor НЕ получает тулы напрямую. Его единственные "тулы" — auto-generated `agent-researchAgent` и `agent-writerAgent` (из `agents` property). Все реальные тулы живут на суб-агентах. Supervisor решает **кому** делегировать, суб-агент решает **какой тул** вызвать.
 
@@ -442,15 +448,11 @@ npm run dev
 
 1. **Nested tool visibility в supervisor stream** → Проходят ли tool calls суб-агента (e.g. `getCurrentDatetime`) через supervisor stream как отдельные tool parts? Или они скрыты внутри `agent-researchAgent` tool execution? Если скрыты — в UI видны только delegation events (F4), без деталей об использовании конкретных тулов. Проверить при реализации. Не блокирует — delegation events достаточны для MVP.
 
-2. **Точное имя MCP-пакета** → `@modelcontextprotocol/server-brave-search` или `@anthropic-ai/mcp-server-brave-search`? Проверить в npm registry при реализации. Функциональность одинаковая — stdio MCP server для Brave Search API.
+2. **MCPClient HTTP auth конфигурация** → Apify MCP требует `Authorization: Bearer` header. Точный формат конфигурации `MCPClient` для HTTP/SSE с auth headers (`requestInit`?) — проверить в документации Mastra при реализации. Альтернатива: `MastraMCPClient` (single server) с явным `connect()` и `tools()`.
 
-3. **MCP в production (Railway)** → `npx -y` скачивает пакет при первом запуске — медленный cold start. Варианты:
-   - (a) Установить MCP-сервер как dependency (`npm install @.../server-brave-search`) и запускать через `node node_modules/.bin/...`
-   - (b) Оставить `npx -y` — после первого запуска кэшируется
-   - (c) Использовать HTTP-транспорт если MCP-сервер доступен как hosted service
-   - Рекомендация: начать с (b), перейти на (a) если cold start проблематичен.
+3. **Apify Actors в MCP** → Какие конкретно Actors доступны через `mcp.apify.com/sse` по умолчанию? Нужна ли конфигурация `actors` параметра для выбора конкретных Actors? Проверить документацию Apify и вывод `listTools()` при реализации.
 
-4. **MCPClient lifecycle** → Поведение при crash дочернего MCP-процесса (stdio). Автоматический reconnect? Нужен ли health check? Mastra MCPClient может обрабатывать это внутри — проверить документацию и поведение при реализации.
+4. **MCPClient SSE reconnect** → Поведение при разрыве HTTP/SSE соединения с Apify MCP. Автоматический reconnect? Timeout handling? Mastra MCPClient может обрабатывать это внутри — проверить при реализации.
 
 5. **Модель research-агента** → Та же модель что у supervisor'а (`openai/gpt-5.4`) или дешевле? Research с тулами может работать на cheaper модели (tool calling хорошо работает и на меньших моделях). Решить после тестирования качества. Тот же вопрос в F4 (Open Question 2) — решить в одном месте.
 

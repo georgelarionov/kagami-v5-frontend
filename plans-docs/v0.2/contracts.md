@@ -140,7 +140,7 @@ GET /api/chat/messages?chatId={chatId}&page={page}&perPage={perPage}
 - **Registration key:** `kagamiAgent` (ключ в `agents: { kagamiAgent: supervisorAgent }`)
 - **HTTP endpoint:** `POST /api/agents/kagami-supervisor/stream`
 - **`defaultOptions: { maxSteps: 10 }`** — задан в определении агента, BFF override не обязателен
-- **Tools:** `researchTool` (Perplexity Sonar) — доступен supervisor'у напрямую
+- **Tools:** нет (делегирует суб-агентам). В F4 был `researchTool` напрямую — перенесён на research-agent в F5
 
 ### Sub-agents
 
@@ -165,3 +165,42 @@ GET /api/chat/messages?chatId={chatId}&page={page}&perPage={perPage}
 - Delegation parts (`tool-agent-*`) отображаются как `DelegationStep` (Steps из prompt-kit)
 - Обычные tool parts (`tool-*` без `agent-` prefix) отображаются как `Tool` (F3)
 - Порядок проверок: `isDelegationPart()` перед `isToolPart()`
+
+---
+
+## F5: Tools & MCP
+
+### Custom Tools
+
+| Tool ID | Object key (in stream) | Agent |
+|---|---|---|
+| `get-current-datetime` | `getCurrentDatetime` → `tool-getCurrentDatetime` | researchAgent |
+| `research` | `researchTool` → `tool-researchTool` | researchAgent (перенесён с supervisor в F5) |
+
+- Naming convention: NO `agent-` prefix in tool names (collision with F4 delegation detection `isDelegationPart()`)
+- Tool calls in stream: standard `tool-{objectKey}` format (handled by F3 Tool component)
+
+### MCP Servers
+
+| Server ID | Transport | Agent | Namespace |
+|---|---|---|---|
+| `apify` | HTTP/SSE (`https://mcp.apify.com/sse`) | researchAgent | `apify_*` |
+
+- MCP tools namespaced: `apify_{toolName}` (e.g. `apify_rag-web-browser`)
+- Auth: `Bearer ${APIFY_TOKEN}` via custom fetch
+- Timeout: 300s (Apify Actors can run long)
+- Graceful fallback: if MCP init fails, server continues without MCP tools
+
+### Tool Assignment
+
+| Agent | Custom tools | MCP tools | maxSteps |
+|---|---|---|---|
+| researchAgent | `getCurrentDatetime`, `researchTool` | `apify_*` | 5 |
+| writerAgent | — | — | 1 (default) |
+| supervisorAgent | — (delegates) | — | 10 (from F4) |
+
+### Environment Variables (kagami-api)
+
+```bash
+APIFY_TOKEN=   # Apify API token for MCP server
+```
