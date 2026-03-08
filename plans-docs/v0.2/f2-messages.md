@@ -32,8 +32,13 @@ const result = await thread.listMessages({
   perPage,
   orderBy: { field: 'createdAt', direction: 'DESC' },
 })
-// result: { messages: MastraMessage[], total: number, hasMore: boolean }
+// result: { messages: MastraDBMessage[] }
 ```
+
+> **Внимание:** TypeScript-тип `ListMemoryThreadMessagesResponse` в `@mastra/client-js` содержит только `{ messages }`.
+> Storage layer (Mastra core) возвращает `PaginationInfo` (`total`, `hasMore`, `page`, `perPage`),
+> но client-js НЕ типизирует эти поля. Поэтому `hasMore` вычисляем defensive-но в BFF:
+> `const hasMore = result.messages.length === perPage`
 
 > Mastra API поддерживает `page`/`perPage` пагинацию (НЕ cursor).
 > `orderBy: DESC` — page=0 возвращает последние 50. Перед отдачей клиенту — реверс в ASC.
@@ -88,7 +93,9 @@ export async function GET(req: NextRequest) {
     })
     // Reverse to chronological order (ASC) for client rendering
     const messages = [...result.messages].reverse()
-    return NextResponse.json({ messages, hasMore: result.hasMore })
+    // Defensive: client-js type lacks hasMore, compute from result length
+    const hasMore = result.messages.length === perPage
+    return NextResponse.json({ messages, hasMore })
   } catch {
     return NextResponse.json({ messages: [], hasMore: false })
   }
@@ -130,6 +137,8 @@ export function useChatMessages(chatId: string) {
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
+      // Защита от пустой страницы: если messages пусто, не запрашиваем следующую
+      if (lastPage.messages.length === 0) return undefined
       return lastPage.hasMore ? allPages.length : undefined
     },
   })
@@ -148,6 +157,7 @@ export function useChatMessages(chatId: string) {
     hasMore,
     fetchOlderMessages: query.fetchNextPage,
     isFetchingOlder: query.isFetchingNextPage,
+    loadOlderError: query.error,
   }
 }
 ```
@@ -156,18 +166,28 @@ export function useChatMessages(chatId: string) {
 > page=0 — последние 50, page=1 — предыдущие 50 и т.д.
 > При склейке — reverse pages, затем flatMap messages. Результат: хронологический порядок (ASC).
 
+> **Query key isolation:** ключ `['memory', 'messages', chatId]` не должен инвалидироваться F1 стримингом.
+> Текущий `useChatRun` вызывает `invalidateQueries` на этот ключ — после F1 убедиться, что стриминг
+> не триггерит рефетч infinite query (иначе — лишние запросы и UI flicker).
+> При необходимости использовать отдельный ключ, например `['memory', 'history', chatId]`.
+
 ### Шаг 2.2 — Интеграция с useChat (после F1)
 
 В `chat-page.tsx` (или аналог после F1):
 
 1. `useChatMessages(chatId)` загружает историю (page=0, последние 50)
-2. `messages` передаются как `initialMessages` в `useChat` через `toAISdkV5Messages()`
-3. Новые сообщения из стрима `useChat` добавляет автоматически
-4. При "загрузить ранние" — prepend старых сообщений к `messages` в `useChat` через `setMessages`
+2. **Loading gate:** `useChat` монтируется только после загрузки истории (не раньше) — иначе `initialMessages` будет пустым, т.к. `useChat` читает `initialMessages` только при маунте
+3. `messages` передаются как `initialMessages` в `useChat` через `toAISdkV5Messages()`
+4. Новые сообщения из стрима `useChat` добавляет автоматически
+5. При "загрузить ранние" — prepend старых сообщений к `messages` в `useChat` через `setMessages`
+6. **Кнопка "Загрузить ранние" заблокирована при стриминге** (`status !== 'ready'`) — `setMessages` во время активного стрима перезапишет in-flight контент
 
 ```typescript
 // Пример интеграции в chat-page.tsx
-const { messages: historyMessages, hasMore, fetchOlderMessages, isFetchingOlder } = useChatMessages(chatId)
+const { messages: historyMessages, isLoading: isHistoryLoading, hasMore, fetchOlderMessages, isFetchingOlder } = useChatMessages(chatId)
+
+// Loading gate: не монтировать useChat пока история не загружена
+if (isHistoryLoading) return <ChatSkeleton />
 
 const { messages, sendMessage, status, setMessages } = useChatStream({
   chatId,
@@ -175,16 +195,25 @@ const { messages, sendMessage, status, setMessages } = useChatStream({
   initialMessages: historyMessages,
 })
 
-// При подгрузке старых — обновить messages в useChat
+// При подгрузке старых — prepend только новых страниц (page > 0), page 0 уже в initialMessages
 const handleLoadOlder = async () => {
   const result = await fetchOlderMessages()
   if (result.data) {
-    // Prepend older messages
-    const olderMessages = [...result.data.pages].reverse().flatMap(p => p.messages)
-    setMessages([...toAISdkV5Messages(olderMessages), ...messages])
+    // Исключаем page 0 (уже в useChat как initialMessages), берём только старые страницы
+    const olderPages = result.data.pages.slice(1) // pages: [page0, page1, page2...] → [page1, page2...]
+    const olderMessages = [...olderPages].reverse().flatMap(p => p.messages)
+    if (olderMessages.length > 0) {
+      setMessages([...toAISdkV5Messages(olderMessages), ...messages])
+    }
   }
 }
 ```
+
+> **Race condition guard:** кнопка "Загрузить ранние" disabled при `status !== 'ready'` (см. шаг 2.3).
+> Это предотвращает вызов `setMessages` во время активного стрима, который перезаписал бы in-flight контент.
+
+> **Дедупликация:** `result.data.pages` хранятся в порядке запроса: `[page0, page1, ...]`.
+> `page0` уже передан как `initialMessages`, поэтому при prepend используем `pages.slice(1)`.
 
 > Точная интеграция зависит от API `useChat` из F1. Возможны варианты:
 > `setMessages` для обновления полного списка, или сохранение в отдельном state + merge.
@@ -203,18 +232,21 @@ const handleLoadOlder = async () => {
       variant="ghost"
       size="sm"
       onClick={onLoadOlder}
-      disabled={isFetchingOlder}
+      disabled={isFetchingOlder || isStreaming}
     >
       {isFetchingOlder ? (
         <Loader2 className="size-4 animate-spin mr-2" />
       ) : (
         <ChevronUp className="size-4 mr-2" />
       )}
-      Загрузить ранние
+      {loadOlderError ? 'Retry' : 'Загрузить ранние'}
     </Button>
   </div>
 )}
 ```
+
+> **Блокировка при стриминге:** `isStreaming` (`status !== 'ready'`) предотвращает race condition с `setMessages`.
+> **Ошибка загрузки:** `useInfiniteQuery` ретраит 3 раза автоматически. При финальной ошибке текст кнопки меняется на "Retry". `loadOlderError` берётся из `query.error` в хуке.
 
 **Props** — добавить:
 ```typescript
@@ -223,6 +255,8 @@ interface MessageListProps {
   isLoading: boolean
   hasMore: boolean
   isFetchingOlder: boolean
+  isStreaming: boolean
+  loadOlderError: Error | null
   onLoadOlder: () => void
 }
 ```
@@ -249,8 +283,15 @@ const handleLoadOlder = async () => {
 }
 ```
 
-> Если F1 заменит ScrollArea на ChatContainer (prompt-kit) — адаптировать селектор viewport.
-> `ChatContainerRoot` использует `use-stick-to-bottom`, у которого свой ref для viewport.
+> **Важно: конфликт с `use-stick-to-bottom` (ChatContainer из prompt-kit).**
+> F1 заменяет ScrollArea на ChatContainer, который использует `use-stick-to-bottom`.
+> Stick-to-bottom будет бороться с ручным `scrollTop` при prepend — он детектит изменение позиции и пытается вернуть скролл вниз.
+>
+> **При реализации (после F1):**
+> 1. Проверить, есть ли у `use-stick-to-bottom` API для временного отключения (disable/pause)
+> 2. Если нет — рассмотреть `flushSync` + синхронное измерение DOM вместо `requestAnimationFrame`
+> 3. Адаптировать селектор viewport под `ChatContainer` (у него свой ref)
+> 4. Обязательно тестировать scroll preservation именно с ChatContainer, не с ScrollArea
 
 ### Шаг 2.5 — Восстановление при перезагрузке
 
@@ -274,6 +315,11 @@ const handleLoadOlder = async () => {
 - [ ] Кнопка скрыта когда все сообщения загружены
 - [ ] Пустой чат — "Send a message to start", кнопки нет
 - [ ] Менее 50 сообщений — все загружены, кнопки нет
+- [ ] Кнопка "Загрузить ранние" заблокирована во время стриминга
+- [ ] При ошибке загрузки старых — кнопка показывает "Retry"
+- [ ] Пустая страница от сервера не вызывает бесконечный loop загрузки
+- [ ] Нет дубликатов сообщений при подгрузке старых (page 0 не дублируется)
+- [ ] Query key не инвалидируется стримингом (нет лишних рефетчей)
 - [ ] Новые сообщения через стрим не конфликтуют с подгрузкой старых
 
 ## Решённые вопросы
@@ -284,3 +330,7 @@ const handleLoadOlder = async () => {
 4. **UI подгрузки** → Явная кнопка "Загрузить ранние" (не infinite scroll).
 5. **Удаление истории** → Вынесено в F8. В F2 только пагинация.
 6. **API удаления (для F8)** → `thread.deleteMessages(messageIds)` в client-js (конкретные ID), или `DELETE /memory/deleteMessages` с `{ threadId, clearAll: true }` через REST API Mastra Server.
+7. **hasMore вычисление** → Defensive: `messages.length === perPage` в BFF. TypeScript-тип `@mastra/client-js` не включает `hasMore` в `ListMemoryThreadMessagesResponse`, хотя storage layer его возвращает.
+8. **Дедупликация при prepend** → `pages.slice(1)` исключает page 0 (уже в `initialMessages`). Дедупликация по ID не нужна при корректном slice.
+9. **Race condition стриминг + load older** → Кнопка disabled при `status !== 'ready'`. `setMessages` не вызывается во время активного стрима.
+10. **Scroll restoration + ChatContainer** → `use-stick-to-bottom` конфликтует с ручным `scrollTop`. Финальное решение — после F1, когда ChatContainer интегрирован.
