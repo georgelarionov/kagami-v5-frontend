@@ -2,9 +2,15 @@
 
 import { useCallback, useEffect, useRef } from 'react'
 import { Message, MessageContent } from '@/components/ui/message'
+import { Tool } from '@/components/ui/tool'
+import type { ToolPart } from '@/components/ui/tool'
 import { Button } from '@/components/ui/button'
 import { Loader2, ChevronUp } from 'lucide-react'
 import type { UIMessage } from 'ai'
+
+function isToolPart(part: { type: string }): boolean {
+  return part.type.startsWith('tool-')
+}
 
 interface MessageListProps {
   messages: UIMessage[]
@@ -94,17 +100,32 @@ export function MessageList({
 
         return (
           <Message key={msg.id} className="justify-start">
-            <div className="max-w-[85%]">
-              <MessageContent
-                markdown
-                id={msg.id}
-                className="bg-transparent dark:prose-invert"
-              >
-                {msg.parts
-                  ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-                  .map((p) => p.text)
-                  .join('') ?? ''}
-              </MessageContent>
+            <div className="max-w-[85%] space-y-2">
+              {msg.parts?.map((part, i) => {
+                if (part.type === 'text') {
+                  return (
+                    <MessageContent
+                      key={`${msg.id}-text-${i}`}
+                      markdown
+                      id={msg.id}
+                      className="bg-transparent dark:prose-invert"
+                    >
+                      {part.text}
+                    </MessageContent>
+                  )
+                }
+                if (isToolPart(part)) {
+                  const toolPart = { ...part, type: part.type.replace(/^tool-/, '') } as unknown as ToolPart
+                  return (
+                    <Tool
+                      key={`${msg.id}-tool-${toolPart.toolCallId}`}
+                      toolPart={toolPart}
+                      defaultOpen={toolPart.state === 'output-error'}
+                    />
+                  )
+                }
+                return null
+              })}
             </div>
           </Message>
         )
