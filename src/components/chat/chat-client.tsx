@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toAISdkV5Messages } from '@mastra/ai-sdk/ui'
 import type { UIMessage } from 'ai'
 import { ChatPage } from './chat-page'
 import { Loader } from '@/components/ui/loader'
+import { useChatMessages } from '@/hooks/use-chat-messages'
 
 interface ChatClientProps {
   chatId: string
@@ -35,50 +36,59 @@ function isPendingMessageAnswered(messages: UIMessage[], pendingText: string): b
 }
 
 export function ChatClient({ chatId, projectId }: ChatClientProps) {
-  const [initialMessages, setInitialMessages] = useState<UIMessage[] | undefined>(undefined)
+  const { messages: rawMessages, isLoading, hasMore, fetchOlderMessages, isFetchingOlder, loadOlderError } = useChatMessages(chatId)
   const [pendingMessage, setPendingMessage] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  const [pendingChecked, setPendingChecked] = useState(false)
 
-  useEffect(() => {
-    async function loadMessages() {
-      try {
-        const [messagesRes, activeRunRes] = await Promise.all([
-          fetch(`/api/chat/messages?chatId=${chatId}`),
-          fetch(`/api/chat/active-run?chatId=${chatId}`),
-        ])
+  const uiMessages = useMemo(
+    () => !isLoading ? (toAISdkV5Messages(rawMessages) as UIMessage[]) : [],
+    [isLoading, rawMessages]
+  )
 
-        let uiMessages: UIMessage[] = []
-        if (messagesRes.ok) {
-          const { messages } = await messagesRes.json()
-          uiMessages = toAISdkV5Messages(messages) as UIMessage[]
-          setInitialMessages(uiMessages)
-        } else {
-          setInitialMessages([])
-        }
-
-        let pending: string | null = null
-        if (activeRunRes.ok) {
-          const data = await activeRunRes.json()
-          pending = data.activeRun?.pendingMessage ?? null
-        }
-
-        // If pendingMessage exists but memory already has the answer — clear it
-        if (pending && uiMessages.length > 0 && isPendingMessageAnswered(uiMessages, pending)) {
-          fetch(`/api/chat/active-run?chatId=${chatId}`, { method: 'DELETE' }).catch(() => {})
-          pending = null
-        }
-
-        setPendingMessage(pending)
-      } catch {
-        setInitialMessages([])
-      } finally {
-        setIsLoading(false)
+  // Wrap fetchOlderMessages to return converted UIMessage[] for prepending
+  const loadOlderAsUIMessages = useCallback(async (): Promise<UIMessage[]> => {
+    const result = await fetchOlderMessages()
+    if (result.data) {
+      // pages: [page0 (newest), page1, page2 (oldest)...]
+      // page 0 is already in initialMessages, take only older pages
+      const olderPages = result.data.pages.slice(1)
+      const olderMessages = [...olderPages].reverse().flatMap(p => p.messages)
+      if (olderMessages.length > 0) {
+        return toAISdkV5Messages(olderMessages) as UIMessage[]
       }
     }
-    loadMessages()
+    return []
+  }, [fetchOlderMessages])
+
+  // Check for active run (pending message) on mount
+  useEffect(() => {
+    async function checkActiveRun() {
+      try {
+        const res = await fetch(`/api/chat/active-run?chatId=${chatId}`)
+        if (res.ok) {
+          const data = await res.json()
+          const pending = data.activeRun?.pendingMessage ?? null
+          setPendingMessage(pending)
+        }
+      } catch {
+        // ignore
+      } finally {
+        setPendingChecked(true)
+      }
+    }
+    checkActiveRun()
   }, [chatId])
 
-  if (isLoading) {
+  // Clear stale pending message once both messages and pending are loaded
+  useEffect(() => {
+    if (isLoading || !pendingChecked || !pendingMessage) return
+    if (uiMessages.length > 0 && isPendingMessageAnswered(uiMessages, pendingMessage)) {
+      fetch(`/api/chat/active-run?chatId=${chatId}`, { method: 'DELETE' }).catch(() => {})
+      setPendingMessage(null)
+    }
+  }, [isLoading, pendingChecked, pendingMessage, uiMessages, chatId])
+
+  if (isLoading || !pendingChecked) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader variant="dots" size="md" />
@@ -90,8 +100,12 @@ export function ChatClient({ chatId, projectId }: ChatClientProps) {
     <ChatPage
       chatId={chatId}
       projectId={projectId}
-      initialMessages={initialMessages}
+      initialMessages={uiMessages}
       pendingMessage={pendingMessage}
+      hasMore={hasMore}
+      onLoadOlder={loadOlderAsUIMessages}
+      isFetchingOlder={isFetchingOlder}
+      loadOlderError={loadOlderError}
     />
   )
 }
