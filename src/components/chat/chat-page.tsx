@@ -2,9 +2,11 @@
 
 import { useCallback, useRef, useState } from 'react'
 import { useChatStream } from '@/hooks/use-chat-stream'
+import { useClearHistory } from '@/hooks/use-clear-history'
 import { MessageList } from './message-list'
 import { Composer } from './composer'
 import { RunStatus } from './run-status'
+import { ClearHistoryButton } from './clear-history-button'
 import { ProjectSettings } from '@/components/settings/project-settings'
 import type { UIMessage } from 'ai'
 
@@ -34,6 +36,7 @@ export function ChatPage({
     projectId,
     initialMessages,
   })
+  const clearHistory = useClearHistory(chatId)
 
   const [pendingMessage, setPendingMessage] = useState(initialPendingMessage ?? null)
   const lastSentRef = useRef<string | null>(null)
@@ -53,6 +56,11 @@ export function ChatPage({
       setPendingMessage(null)
     }
   }, [pendingMessage, sendMessage])
+
+  const handleClearHistory = useCallback(async () => {
+    await clearHistory.mutateAsync()
+    setMessages([])
+  }, [clearHistory, setMessages])
 
   const handleLoadOlder = useCallback(async () => {
     const olderMessages = await onLoadOlder()
@@ -76,7 +84,13 @@ export function ChatPage({
     <div className="relative flex h-screen w-full flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b px-4 py-2">
         <h1 className="text-lg font-semibold">Kagami</h1>
-        <ProjectSettings projectId={projectId} />
+        <div className="flex items-center gap-1">
+          <ClearHistoryButton
+            onClear={handleClearHistory}
+            disabled={status !== 'ready'}
+          />
+          <ProjectSettings projectId={projectId} />
+        </div>
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
         <MessageList

@@ -204,3 +204,76 @@ GET /api/chat/messages?chatId={chatId}&page={page}&perPage={perPage}
 ```bash
 APIFY_TOKEN=   # Apify API token for MCP server
 ```
+
+---
+
+## F6: Project Config
+
+> Контракты F6 см. в `plans-docs/v0.2/f6-project-config.md`
+
+---
+
+## F7: Registry API
+
+### Endpoint (Mastra Server)
+
+- `GET {MASTRA_API_URL}/registry` — returns full registry (no auth, private network)
+
+### BFF proxy (Browser → BFF)
+
+- `GET /api/registry` — proxied with Clerk auth
+
+### Response (200)
+
+```json
+{
+  "agents": [
+    { "id": "research-agent", "name": "Research Agent", "description": "...", "defaultPrompt": "..." }
+  ],
+  "tools": [
+    { "key": "getCurrentDatetime", "id": "get-current-datetime", "name": "Current Date & Time", "description": "...", "source": "custom", "agentId": "research-agent", "configSchema": null }
+  ],
+  "supervisorDefaultPrompt": "You are Kagami..."
+}
+```
+
+### Response fields
+
+- `agents[]`: id, name, description, defaultPrompt
+- `tools[]`: key, id, name, description, source (`'custom'` | `'mcp'`), agentId, configSchema
+- `supervisorDefaultPrompt`: string
+
+### configSchema format
+
+- JSON Schema (converted from Zod via `zod-to-json-schema`)
+- `null` if tool has no configurable params
+- Supported property types: string, number, integer, boolean
+
+### Errors
+
+- `401` — Unauthorized (BFF proxy only)
+- `502` — Mastra server unreachable
+
+---
+
+## F8: Chat History Management
+
+### Endpoint (BFF)
+
+- `DELETE /api/chat/messages?chatId=<uuid>` — clear all messages
+
+### Response
+
+- `200`: `{ "ok": true }`
+- `400`: Missing chatId
+- `401`: Unauthorized
+- `404`: Chat not found / not owned
+- `409`: Active run (pendingMessage set)
+- `500`: Server error
+
+### Behavior
+
+- Deletes all messages from Mastra memory thread via `DELETE /memory/deleteMessages` with `{ threadId, clearAll: true }`
+- Thread itself preserved (can send new messages)
+- Does NOT delete chat record from frontend DB
+- Rejected while pendingMessage is set (active run)
