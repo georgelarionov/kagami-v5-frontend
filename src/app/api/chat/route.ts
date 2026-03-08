@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getDb } from '@/db'
 import { chats, projects } from '@/db/schema'
 import { eq, and } from 'drizzle-orm'
-import { mastraClient } from '@/lib/mastra'
+import { MastraClient } from '@mastra/client-js'
 import { createUIMessageStream, createUIMessageStreamResponse, type UIMessage } from 'ai'
 import { toAISdkStream } from '@mastra/ai-sdk'
 import type { ChunkType, MastraModelOutput } from '@mastra/core/stream'
@@ -16,12 +16,10 @@ export async function POST(req: NextRequest) {
 
   let messages: UIMessage[]
   let chatId: string
-  let projectId: string | undefined
   try {
     const body = await req.json()
     messages = body.messages
     chatId = body.chatId
-    projectId = body.projectId
   } catch {
     return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
   }
@@ -53,14 +51,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Empty message' }, { status: 400 })
   }
 
-  const resolvedProjectId = projectId || chat.projectId
-  const resourceId = `${userId}:${resolvedProjectId}`
+  const resourceId = `${userId}:${chat.projectId}`
 
   // Save pendingMessage before starting stream
   await getDb().update(chats).set({ pendingMessage: userText }).where(eq(chats.id, chatId))
 
-  // Stream from Mastra — TODO(F6): add X-Project-Id header to MastraClient
-  const agent = mastraClient.getAgent('kagami-supervisor')
+  // Per-request MastraClient with X-Project-Id for requestContext middleware
+  const client = new MastraClient({
+    baseUrl: process.env.MASTRA_API_URL || 'http://localhost:4111',
+    headers: { 'X-Project-Id': chat.projectId },
+  })
+  const agent = client.getAgent('kagami-supervisor')
 
   let response: Awaited<ReturnType<typeof agent.stream>>
   try {

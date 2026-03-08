@@ -5,6 +5,7 @@ import { useChatStream } from '@/hooks/use-chat-stream'
 import { MessageList } from './message-list'
 import { Composer } from './composer'
 import { RunStatus } from './run-status'
+import { ProjectSettings } from '@/components/settings/project-settings'
 import type { UIMessage } from 'ai'
 
 interface ChatPageProps {
@@ -73,6 +74,10 @@ export function ChatPage({
 
   return (
     <div className="relative flex h-screen w-full flex-col overflow-hidden">
+      <div className="flex items-center justify-between border-b px-4 py-2">
+        <h1 className="text-lg font-semibold">Kagami</h1>
+        <ProjectSettings projectId={projectId} />
+      </div>
       <div className="flex-1 min-h-0 overflow-y-auto">
         <MessageList
           messages={messages}
