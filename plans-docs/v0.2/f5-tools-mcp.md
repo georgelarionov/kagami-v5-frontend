@@ -357,7 +357,7 @@ cd /path/to/kagami-v5
 npm run dev
 ```
 
-Открыть Mastra Studio → Agents → kagamiAgent:
+Открыть Mastra Studio → Agents → kagami-agent:
 
 **Кастомные тулы:**
 - [ ] "What time is it now?" → supervisor делегирует researchAgent → вызывает `getCurrentDatetime` → возвращает время
@@ -380,7 +380,7 @@ npm run dev
 **Тулы в Mastra Studio:**
 - [ ] Agents → research-agent → Tools: видны `getCurrentDatetime` + `braveSearch_*`
 - [ ] Agents → writer-agent → Tools: пусто
-- [ ] Agents → kagamiAgent (supervisor) → Tools: видны `agent-researchAgent`, `agent-writerAgent` (auto-generated delegation tools)
+- [ ] Agents → kagami-agent (supervisor) → Tools: видны `agent-researchAgent`, `agent-writerAgent` (auto-generated delegation tools)
 
 ---
 

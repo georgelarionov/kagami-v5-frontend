@@ -151,8 +151,8 @@ import { ScrollButton } from '@/components/prompt-kit/scroll-button'
 Создать `plans-docs/v0.2/contracts.md` — единый файл контрактов между репо. Копировать в обе репы.
 
 Первые контракты F1:
-- Agent ID: `kagamiAgent`
-- Streaming endpoint: `MastraClient.getAgent('kagamiAgent').stream(message: string, options)`
+- Agent ID: `kagami-agent`
+- Streaming endpoint: `MastraClient.getAgent('kagami-agent').stream(message: string, options)`
 - Memory format: `{ memory: { thread: chatId, resource: '${userId}:${projectId}' } }`
 - BFF → Browser: AI SDK UIMessageStream format (SSE)
 
@@ -257,7 +257,7 @@ export async function POST(req: Request) {
     baseUrl: process.env.MASTRA_API_URL,
     headers: { 'X-Project-Id': projectId }, // для будущего F6
   })
-  const agent = client.getAgent('kagamiAgent')
+  const agent = client.getAgent('kagami-agent')
   const response = await agent.stream(userText, {
     memory: { thread: chatId, resource: `${userId}:${projectId}` },
   })

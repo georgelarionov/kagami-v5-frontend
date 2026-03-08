@@ -350,7 +350,7 @@ const client = new MastraClient({
   baseUrl: process.env.MASTRA_API_URL || 'http://localhost:4111',
   headers: { 'X-Project-Id': projectId },
 })
-const agent = client.getAgent('kagamiAgent')
+const agent = client.getAgent('kagami-agent')
 const response = await agent.stream(userText, {
   memory: { thread: chatId, resource: `${userId}:${projectId}` },
 })
@@ -433,7 +433,7 @@ import { loadProjectConfig } from './config/load-project-config'
 
 export const mastra = new Mastra({
   storage: store,
-  agents: { kagamiAgent: supervisorAgent },
+  agents: { kagami-agent: supervisorAgent },
   workflows: { chatWorkflow },
   logger: new PinoLogger({
     name: 'Mastra',

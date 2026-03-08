@@ -26,7 +26,7 @@
 
 **Вызов Mastra (проверено по документации `@mastra/client-js`):**
 ```typescript
-const thread = mastraClient.getMemoryThread({ threadId: chatId, agentId: 'kagamiAgent' })
+const thread = mastraClient.getMemoryThread({ threadId: chatId, agentId: 'kagami-agent' })
 const result = await thread.listMessages({
   page,
   perPage,
@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
   if (!chat) return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
 
   try {
-    const thread = mastraClient.getMemoryThread({ threadId: chatId, agentId: 'kagamiAgent' })
+    const thread = mastraClient.getMemoryThread({ threadId: chatId, agentId: 'kagami-agent' })
     const result = await thread.listMessages({
       page,
       perPage,
