@@ -143,7 +143,7 @@ Guidelines:
 })
 ```
 
-> **Agent ID:** `id: 'kagami-supervisor'` — новый внутренний ID. Но регистрация в Mastra instance под ключом `kagami-agent` (шаг 2.3) — обратная совместимость с BFF и memory.
+> **Agent ID:** `id: 'kagami-supervisor'` — новый внутренний ID. Но регистрация в Mastra instance под ключом `kagamiAgent` (шаг 2.3) — обратная совместимость с BFF и memory.
 >
 > **Memory:** Только supervisor имеет Memory instance. Storage НЕ передаётся явно в конструктор Memory — наследуется от Mastra instance (тот же паттерн что в текущем `kagami-agent.ts`). Суб-агенты наследуют контекст через delegation.
 >
@@ -189,7 +189,7 @@ import { chatWorkflow } from './workflows/chat-workflow'
 
 export const mastra = new Mastra({
   storage: store,
-  agents: { kagami-agent: supervisorAgent },
+  agents: { kagamiAgent: supervisorAgent },
   workflows: { chatWorkflow },
   logger: new PinoLogger({
     name: 'Mastra',
@@ -198,7 +198,7 @@ export const mastra = new Mastra({
 })
 ```
 
-> **Ключ `kagami-agent` сохранён** — BFF вызывает `client.getAgent('kagami-agent')` без изменений.
+> **Ключ `kagamiAgent` сохранён** — BFF вызывает `client.getAgent('kagami-agent')` без изменений (Mastra derives agent ID `kagami-agent` from registration key `kagamiAgent`).
 > Workflow остаётся в регистрации для будущего использования (не используется для чата после F1).
 
 ### Шаг 2.4 — Удалить старый agent
@@ -234,7 +234,7 @@ Workflow использует `mastra?.getAgent('kagami-agent')` — продо�
 > Файл создаётся в F1 (шаг 2.0). Если F1 ещё не реализован — создать файл.
 
 Добавить контракты F4:
-- Agent registration key: `kagami-agent` (без изменений)
+- Agent registration key: `kagamiAgent` (без изменений)
 - Agent internal ID: `kagami-supervisor` (новый)
 - Sub-agent IDs: `research-agent`, `writer-agent`
 - Delegation tool names в стриме: `agent-researchAgent`, `agent-writerAgent`
@@ -450,7 +450,7 @@ import { DelegationStep } from '@/components/chat/delegation-step'
 
 ## Решённые вопросы
 
-1. **Agent ID** → Registration key `kagami-agent` сохранён в Mastra instance (`agents: { kagami-agent: supervisorAgent }`) для обратной совместимости с BFF. Внутренний `id: 'kagami-supervisor'`. BFF не требует изменений кроме `maxSteps`.
+1. **Agent ID** → Registration key `kagamiAgent` сохранён в Mastra instance (`agents: { kagamiAgent: supervisorAgent }`) для обратной совместимости с BFF. Mastra derives agent ID `kagami-agent` from camelCase key. Внутренний `id: 'kagami-supervisor'`. BFF не требует изменений кроме `maxSteps`.
 
 2. **Delegation events в стриме** → Делегирование приходит как tool calls с именами `agent-{subAgentId}` (автоматически генерируются Mastra). Проходит через `toAISdkStream()` → `message.parts` как `type: 'tool-agent-{subAgentId}'`. Подтверждено документацией: supervisor автоматически получает tools для каждого суб-агента.
 
@@ -462,7 +462,7 @@ import { DelegationStep } from '@/components/chat/delegation-step'
 
 6. **maxSteps** → Необходим для supervisor'а. Без него supervisor выполнит только 1 шаг и не обработает ответы суб-агентов. `maxSteps: 10` задан через `defaultOptions` в определении агента — BFF не нужно передавать явно. `MastraClient.getAgent().stream()` поддерживает `maxSteps` через HTTP API (подтверждено проверкой типов `@mastra/client-js`).
 
-7. **Workflow** → Не блокирует. Workflow продолжает работать (ключ `kagami-agent` сохранён), но для чата не используется после F1. Добавить код-комментарий о необходимости maxSteps при реактивации.
+7. **Workflow** → Не блокирует. Workflow продолжает работать (ключ `kagamiAgent` сохранён), но для чата не используется после F1. Добавить код-комментарий о необходимости maxSteps при реактивации.
 
 8. **`.network()` vs `.stream()`** → `.network()` deprecated. Supervisor использует стандартный `.stream()` с `maxSteps`. Подтверждено migration guide Mastra.
 

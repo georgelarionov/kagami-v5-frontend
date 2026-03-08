@@ -698,7 +698,7 @@ export function ToolParamsForm({ toolId, schema, values, onChange }: ToolParamsF
 | Tool `key` (object key in tools map) | `getCurrentDatetime` | `activeTools`, stream (`tool-{key}`), TOOL_REGISTRY |
 | Tool `id` (from createTool) | `get-current-datetime` | Mastra internals (logs, storage) |
 | Agent `id` | `research-agent` | AGENT_REGISTRY, agentPrompts, requestContext |
-| Agent registration key | `kagami-agent` | Mastra instance, MastraClient.getAgent() |
+| Agent registration key | `kagamiAgent` | Mastra instance (`agents: { kagamiAgent }`) |
 | MCP tool namespace | `braveSearch_web_search` | Same as `key` for MCP tools |
 ```
 

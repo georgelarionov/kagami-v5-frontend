@@ -433,7 +433,7 @@ import { loadProjectConfig } from './config/load-project-config'
 
 export const mastra = new Mastra({
   storage: store,
-  agents: { kagami-agent: supervisorAgent },
+  agents: { kagamiAgent: supervisorAgent },
   workflows: { chatWorkflow },
   logger: new PinoLogger({
     name: 'Mastra',
