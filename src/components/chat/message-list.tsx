@@ -1,88 +1,64 @@
 'use client'
 
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { useEffect, useRef } from 'react'
-import type { Message } from '@/types/chat'
+import { Message, MessageContent } from '@/components/ui/message'
+import type { UIMessage } from 'ai'
 
 interface MessageListProps {
-  messages: Message[]
-  isLoading: boolean
+  messages: UIMessage[]
 }
 
-function extractText(parts: unknown[]): string {
-  return parts
-    .filter((p): p is { type: string; text: string } =>
-      !!p && typeof p === 'object' && 'type' in p && (p as { type: string }).type === 'text' && 'text' in p,
-    )
-    .map((p) => p.text)
-    .join('\n')
-}
-
-function renderContent(content: unknown): string {
-  if (typeof content === 'string') return content
-  if (Array.isArray(content)) {
-    const text = extractText(content)
-    if (text) return text
-  }
-  if (content && typeof content === 'object') {
-    const obj = content as Record<string, unknown>
-    // Mastra format: { format: 2, parts: [{ type: "text", text: "..." }] }
-    if (Array.isArray(obj.parts)) {
-      const text = extractText(obj.parts)
-      if (text) return text
-    }
-    if (typeof obj.text === 'string') return obj.text
-    if (typeof obj.content === 'string') return obj.content
-  }
-  return content ? JSON.stringify(content) : ''
-}
-
-export function MessageList({ messages, isLoading }: MessageListProps) {
-  const contentRef = useRef<HTMLDivElement>(null)
+export function MessageList({ messages }: MessageListProps) {
+  const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const viewport = contentRef.current?.closest('[data-slot="scroll-area-viewport"]')
-    if (viewport) {
-      viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' })
-    }
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  if (isLoading && messages.length === 0) {
+  if (messages.length === 0) {
     return (
-      <div className="h-full flex items-center justify-center text-muted-foreground">
-        Loading...
-      </div>
-    )
-  }
-
-  if (!isLoading && messages.length === 0) {
-    return (
-      <div className="h-full flex items-center justify-center text-muted-foreground/50">
+      <div className="flex flex-1 h-full items-center justify-center text-muted-foreground/50">
         Send a message to start
       </div>
     )
   }
 
   return (
-    <ScrollArea className="h-full p-4">
-      <div ref={contentRef} className="space-y-4 max-w-2xl mx-auto">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div
-              className={`max-w-[80%] rounded-lg px-4 py-2 whitespace-pre-wrap break-words overflow-hidden ${
-                msg.role === 'user'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted'
-              }`}
-            >
-              {renderContent(msg.content)}
+    <div className="space-y-4 p-4 max-w-2xl mx-auto">
+      {messages.map((msg) => {
+        if (msg.role === 'user') {
+          const text = msg.parts
+            ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+            .map((p) => p.text)
+            .join('') ?? ''
+
+          return (
+            <Message key={msg.id} className="justify-end">
+              <MessageContent className="bg-primary text-primary-foreground max-w-[80%]">
+                {text}
+              </MessageContent>
+            </Message>
+          )
+        }
+
+        return (
+          <Message key={msg.id} className="justify-start">
+            <div className="max-w-[85%]">
+              <MessageContent
+                markdown
+                id={msg.id}
+                className="bg-transparent dark:prose-invert"
+              >
+                {msg.parts
+                  ?.filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+                  .map((p) => p.text)
+                  .join('') ?? ''}
+              </MessageContent>
             </div>
-          </div>
-        ))}
-      </div>
-    </ScrollArea>
+          </Message>
+        )
+      })}
+      <div ref={bottomRef} />
+    </div>
   )
 }

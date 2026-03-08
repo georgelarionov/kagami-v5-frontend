@@ -1,16 +1,19 @@
 'use client'
 
+import { Loader } from '@/components/ui/loader'
+import type { ChatStatus } from '@/hooks/use-chat-stream'
+
 interface RunStatusProps {
-  status: string
-  error: string | null
+  status: ChatStatus
+  error: Error | undefined
   onRetry?: () => void
 }
 
 export function RunStatus({ status, error, onRetry }: RunStatusProps) {
-  if (error) {
+  if (status === 'error' && error) {
     return (
       <div className="flex items-center gap-2 px-4 py-2 text-sm text-destructive">
-        <span>{error}</span>
+        <span>{error.message || 'Something went wrong'}</span>
         {onRetry && (
           <button onClick={onRetry} className="underline hover:no-underline">
             Retry
@@ -20,15 +23,18 @@ export function RunStatus({ status, error, onRetry }: RunStatusProps) {
     )
   }
 
-  if (status === 'running') {
+  if (status === 'submitted') {
     return (
-      <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
-        <span className="inline-flex gap-0.5">
-          <span className="animate-bounce [animation-delay:0ms]">.</span>
-          <span className="animate-bounce [animation-delay:150ms]">.</span>
-          <span className="animate-bounce [animation-delay:300ms]">.</span>
-        </span>
-        Thinking
+      <div className="px-4 py-2">
+        <Loader variant="text-shimmer" text="Thinking..." size="sm" />
+      </div>
+    )
+  }
+
+  if (status === 'streaming') {
+    return (
+      <div className="px-4 py-2">
+        <Loader variant="dots" size="sm" />
       </div>
     )
   }
