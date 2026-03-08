@@ -6,39 +6,42 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Settings, RotateCcw, Loader2 } from 'lucide-react'
+import { Settings, RotateCcw, Loader2, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useProjectConfig } from '@/hooks/use-project-config'
-import {
-  AGENT_REGISTRY,
-  TOOL_REGISTRY,
-  DEFAULT_SUPERVISOR_PROMPT,
-} from '@/lib/registry'
+import { useRegistry } from '@/hooks/use-registry'
+import { ToolParamsForm } from '@/components/settings/tool-params-form'
 
 interface ProjectSettingsProps {
   projectId: string
 }
 
 export function ProjectSettings({ projectId }: ProjectSettingsProps) {
-  const { config, isLoading, saveConfig, isSaving } = useProjectConfig(projectId)
+  const { config, isLoading: isConfigLoading, saveConfig, isSaving } = useProjectConfig(projectId)
+  const { data: registry, isLoading: isRegistryLoading, error: registryError } = useRegistry()
   const [open, setOpen] = useState(false)
 
   // Local form state
   const [supervisorPrompt, setSupervisorPrompt] = useState('')
   const [agentPrompts, setAgentPrompts] = useState<Record<string, string>>({})
   const [activeTools, setActiveTools] = useState<string[]>([])
+  const [toolParams, setToolParams] = useState<Record<string, Record<string, unknown>>>({})
   const [dirty, setDirty] = useState(false)
+
+  const isLoading = isConfigLoading || isRegistryLoading
 
   // Sync local state when config loads or sheet opens
   useEffect(() => {
-    if (!open) return
+    if (!open || !registry) return
     setSupervisorPrompt(config?.supervisorPrompt ?? '')
     setAgentPrompts(config?.agentPrompts ?? {})
-    setActiveTools(config?.activeTools ?? TOOL_REGISTRY.map((t) => t.key))
+    setActiveTools(config?.activeTools ?? registry.tools.map((t) => t.key))
+    setToolParams(config?.toolParams ?? {})
     setDirty(false)
-  }, [config, open])
+  }, [config, registry, open])
 
   const handleSave = () => {
+    if (!registry) return
     saveConfig(
       {
         projectId,
@@ -50,8 +53,9 @@ export function ProjectSettings({ projectId }: ProjectSettingsProps) {
           return Object.keys(filtered).length > 0 ? filtered : null
         })(),
         activeTools:
-          activeTools.length === TOOL_REGISTRY.length ? null : activeTools,
-        toolParams: config?.toolParams ?? null,
+          activeTools.length === registry.tools.length ? null : activeTools,
+        toolParams:
+          Object.keys(toolParams).length > 0 ? toolParams : null,
       },
       {
         onSuccess: () => {
@@ -81,6 +85,22 @@ export function ProjectSettings({ projectId }: ProjectSettingsProps) {
     setActiveTools((prev) =>
       checked ? [...prev, toolKey] : prev.filter((k) => k !== toolKey),
     )
+    if (!checked) {
+      setToolParams((prev) => {
+        const next = { ...prev }
+        const tool = registry?.tools.find((t) => t.key === toolKey)
+        if (tool) delete next[tool.id]
+        return next
+      })
+    }
+    setDirty(true)
+  }
+
+  const handleToolParamChange = (toolId: string, param: string, value: unknown) => {
+    setToolParams((prev) => ({
+      ...prev,
+      [toolId]: { ...prev[toolId], [param]: value },
+    }))
     setDirty(true)
   }
 
@@ -100,7 +120,12 @@ export function ProjectSettings({ projectId }: ProjectSettingsProps) {
           <div className="flex items-center justify-center py-8">
             <Loader2 className="size-6 animate-spin text-muted-foreground" />
           </div>
-        ) : (
+        ) : registryError ? (
+          <div className="flex items-center gap-2 py-8 text-destructive">
+            <AlertCircle className="size-5" />
+            <p className="text-sm">Failed to load registry. Try again later.</p>
+          </div>
+        ) : registry ? (
           <div className="space-y-6 py-4">
             {/* Supervisor Prompt */}
             <div className="space-y-2">
@@ -123,7 +148,7 @@ export function ProjectSettings({ projectId }: ProjectSettingsProps) {
                   setSupervisorPrompt(e.target.value)
                   setDirty(true)
                 }}
-                placeholder={DEFAULT_SUPERVISOR_PROMPT}
+                placeholder={registry.supervisorDefaultPrompt}
                 rows={8}
                 className="text-sm font-mono"
               />
@@ -132,8 +157,8 @@ export function ProjectSettings({ projectId }: ProjectSettingsProps) {
               </p>
             </div>
 
-            {/* Agent Prompts */}
-            {AGENT_REGISTRY.map((agent) => (
+            {/* Agent Prompts — from registry */}
+            {registry.agents.map((agent) => (
               <div key={agent.id} className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor={`agent-prompt-${agent.id}`}>
@@ -169,33 +194,47 @@ export function ProjectSettings({ projectId }: ProjectSettingsProps) {
               </div>
             ))}
 
-            {/* Tool Toggles */}
+            {/* Tool Toggles + Params — from registry */}
             <div className="space-y-2">
               <Label>Tools</Label>
               <div className="space-y-3">
-                {TOOL_REGISTRY.map((tool) => (
-                  <div key={tool.key} className="flex items-start gap-3">
-                    <Checkbox
-                      id={`tool-${tool.key}`}
-                      checked={activeTools.includes(tool.key)}
-                      onCheckedChange={(checked) =>
-                        handleToolToggle(tool.key, !!checked)
-                      }
-                    />
-                    <div className="space-y-0.5">
-                      <Label
-                        htmlFor={`tool-${tool.key}`}
-                        className="text-sm font-medium cursor-pointer"
-                      >
-                        {tool.name}
-                        <span className="ml-2 text-xs text-muted-foreground font-normal">
-                          {tool.source === 'mcp' ? 'MCP' : 'Built-in'}
-                        </span>
-                      </Label>
-                      <p className="text-xs text-muted-foreground">
-                        {tool.description}
-                      </p>
+                {registry.tools.map((tool) => (
+                  <div key={tool.key}>
+                    <div className="flex items-start gap-3">
+                      <Checkbox
+                        id={`tool-${tool.key}`}
+                        checked={activeTools.includes(tool.key)}
+                        onCheckedChange={(checked) =>
+                          handleToolToggle(tool.key, !!checked)
+                        }
+                      />
+                      <div className="space-y-0.5">
+                        <Label
+                          htmlFor={`tool-${tool.key}`}
+                          className="text-sm font-medium cursor-pointer"
+                        >
+                          {tool.name}
+                          <span className="ml-2 text-xs text-muted-foreground font-normal">
+                            {tool.source === 'mcp' ? 'MCP' : 'Built-in'}
+                          </span>
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                          {tool.description}
+                        </p>
+                      </div>
                     </div>
+
+                    {/* Tool Params — auto-generated from configSchema */}
+                    {tool.configSchema && activeTools.includes(tool.key) && (
+                      <ToolParamsForm
+                        toolId={tool.id}
+                        schema={tool.configSchema}
+                        values={toolParams[tool.id] ?? {}}
+                        onChange={(param, value) =>
+                          handleToolParamChange(tool.id, param, value)
+                        }
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -211,7 +250,7 @@ export function ProjectSettings({ projectId }: ProjectSettingsProps) {
               </Button>
             </div>
           </div>
-        )}
+        ) : null}
       </SheetContent>
     </Sheet>
   )
