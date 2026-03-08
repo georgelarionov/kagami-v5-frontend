@@ -1,17 +1,17 @@
 # Kagami Web (kagami-v5-frontend)
 
-Next.js BFF + UI for Kagami — a chat app with real-time streaming via Mastra agents.
+Next.js BFF + UI for Kagami — a chat app with background agent execution via Mastra workflows.
 
 ## Architecture
 
 Two-repo setup:
-- **kagami-v5-frontend** (this repo) — Next.js App Router, Clerk auth, Drizzle ORM, shadcn/ui + prompt-kit, AI SDK v6
-- **kagami-api** (separate repo, deployed on Railway) — Mastra Server with agents, memory
+- **kagami-v5-frontend** (this repo) — Next.js App Router, Clerk auth, Drizzle ORM, shadcn/ui, react-query
+- **kagami-api** (separate repo, deployed on Railway) — Mastra Server with agents, workflows, memory
 
 The BFF (Next.js API routes) sits between browser and Mastra Server. Browser never talks to Mastra directly.
 
 ```
-Browser ←SSE→ Next.js API routes (Clerk auth) ←stream→ MastraClient → Mastra Server (private network)
+Browser → Next.js API routes (Clerk auth) → MastraClient → Mastra Server (private network)
 ```
 
 ## Tech Stack
@@ -19,17 +19,17 @@ Browser ←SSE→ Next.js API routes (Clerk auth) ←stream→ MastraClient → 
 - **Framework:** Next.js 16 (App Router, `src/` directory)
 - **Auth:** Clerk (`@clerk/nextjs`, proxy-based via `src/proxy.ts`)
 - **DB:** Neon PostgreSQL via Drizzle ORM (`@neondatabase/serverless`, neon-http driver)
-- **UI:** shadcn/ui + prompt-kit + Tailwind CSS v4 + Inter font
-- **Streaming:** AI SDK v6 (`ai`, `@ai-sdk/react`), `@mastra/ai-sdk` for stream conversion
-- **Mastra Client:** `@mastra/client-js` for agent streaming and memory
+- **UI:** shadcn/ui + Tailwind CSS v4 + Inter font
+- **State:** react-query (`@tanstack/react-query`) for server state
+- **Mastra Client:** `@mastra/client-js` for workflow runs and memory
 
 ## Key Concepts
 
-- **Streaming:** BFF streams from `agent.stream()` via `toAISdkStream()` → `createUIMessageStream()` → SSE to browser. Client uses `useChat` from `@ai-sdk/react`
-- **One active stream per chat:** BFF rejects new messages with 409 while `pendingMessage IS NOT NULL`. Client disables send when `status !== 'ready'`
-- **Save-before-start:** `pendingMessage` saved to `chats` before calling `agent.stream()`. Cleared in `onFinish`/`onError`. Survives page reloads via `active-run` endpoint
-- **Disconnect resilience:** BFF does NOT forward browser abort signal to Mastra. Server continues generation on disconnect, saves to memory. On reload, messages load from memory
-- **Retry on failure:** UI shows Retry button for stream errors and interrupted sessions (pendingMessage present on mount)
+- **Workflow-first execution:** Every user message creates a Mastra workflow run (`run.start()` fire-and-forget). Runs persist on the server regardless of client connection
+- **Polling, not streaming:** UI polls run status with stepped intervals (500ms → 2s → 4s), with a 1-hour max timeout
+- **One active run per chat:** BFF rejects new messages with 409 while a run is active (`running`, `waiting`, `pending`, `paused`). Prevents race conditions on shared thread memory
+- **Save-before-start:** `runId` and `pendingMessage` saved to `chats` before calling `run.start()`. If start fails, both are cleared. `pendingMessage` survives page reloads via the `active-run` endpoint
+- **Retry on failure:** When a run fails, the UI shows a Retry button that re-sends the `pendingMessage`. Retry only appears for `status === 'failed'`, not for 409 errors
 - **Composite resourceId:** `${userId}:${projectId}` for defense in depth at Mastra memory level
 - **threadId = chatId:** Direct mapping between chat records and Mastra memory threads
 
@@ -38,34 +38,38 @@ Browser ←SSE→ Next.js API routes (Clerk auth) ←stream→ MastraClient → 
 ```
 src/
   app/
-    layout.tsx          # ClerkProvider + Inter font
-    page.tsx            # Main page, renders ChatClient
+    layout.tsx          # ClerkProvider + QueryClientProvider + Inter font
+    page.tsx            # Main page, renders ChatPage with NEXT_PUBLIC_CHAT_ID
     providers.tsx       # react-query QueryClientProvider
-    globals.css         # Tailwind v4 theme + prompt-kit keyframes
+    globals.css         # Tailwind v4 theme (shadcn tokens, system mono font)
     api/
       chat/
-        route.ts        # POST — stream message via agent.stream()
+        route.ts        # POST — send message, start workflow run
         active-run/
-          route.ts      # GET/DELETE — check/clear pendingMessage
+          route.ts      # GET — check for active run on mount
+        runs/[id]/
+          route.ts      # GET — poll run status (async params, Next.js 16)
         messages/
           route.ts      # GET — read message history from Mastra memory
   components/
     chat/
-      chat-client.tsx   # Data loader: fetches messages + pendingMessage, converts via toAISdkV5Messages
-      chat-page.tsx     # Container: useChatStream + layout + retry wiring
-      message-list.tsx  # Render UIMessage[] via message.parts + prompt-kit Message/Markdown
-      composer.tsx      # PromptInput with Send/Stop toggle
-      run-status.tsx    # Loader (submitted/streaming) + error display
-    ui/                 # shadcn + prompt-kit components (do not edit manually)
+      chat-page.tsx     # Container: useChatRun + useChatMessages + retry wiring
+      message-list.tsx  # Render messages, auto-scroll via ScrollArea viewport
+      composer.tsx      # Input + send button
+      run-status.tsx    # "Thinking..." / error + retry button
+    ui/                 # shadcn components (do not edit manually)
   db/
     schema.ts           # Drizzle schema: projects, chats (incl. pendingMessage)
     index.ts            # Drizzle client (neon-http driver, lazy init via getDb())
     seed.ts             # One-time seed: default project + chat
   hooks/
-    use-chat-stream.ts  # useChat wrapper with DefaultChatTransport + body: { chatId, projectId }
+    use-chat-run.ts     # Send message, poll run, retry, check active-run on mount
+    use-chat-messages.ts # react-query wrapper for messages
   lib/
     mastra.ts           # MastraClient instance
     utils.ts            # cn() utility (clsx + tailwind-merge)
+  types/
+    chat.ts             # Shared Message type
   proxy.ts              # Clerk auth proxy (Next.js 16 replaces middleware.ts)
 drizzle.config.ts       # Drizzle Kit config (uses DATABASE_URL_DIRECT)
 drizzle/                # Generated migrations
@@ -94,24 +98,25 @@ npx tsx src/db/seed.ts   # Seed default project + chat
 - **"use client"** for all interactive components. Server components only for layout/static content
 - **API routes** handle auth (Clerk), ownership verification, and proxy to Mastra. All business logic validation happens in BFF
 - **API route input validation:** `req.json()` wrapped in try/catch, type checks on inputs
-- **shadcn/prompt-kit components** live in `src/components/ui/` — don't edit these directly, use `npx shadcn@latest add <component>`
-- **Drizzle schema** is the source of truth for `projects` and `chats` tables. Mastra manages its own tables (memory)
+- **shadcn components** live in `src/components/ui/` — don't edit these directly, use `npx shadcn@latest add <component>`
+- **Drizzle schema** is the source of truth for `projects` and `chats` tables. Mastra manages its own tables (memory, workflow state)
+- **Streaming supported** — BFF proxies Mastra agent.stream() as SSE to browser. BFF must NOT forward abort signal to Mastra (see `plans-docs/v0.2/contracts.md`)
 - **Verify Mastra API** via `mastra` MCP and `context7` before implementing — code samples in plans are illustrative, not exact
-- **Contracts:** see `plans-docs/v0.2/contracts.md` for inter-repo API contracts
+- **Shared types** go in `src/types/` — not exported from UI components
 
 ## Mastra Integration
 
 The BFF uses `@mastra/client-js` to communicate with Mastra Server:
-- **Agent ID:** `kagami-agent` (HTTP path: `/api/agents/kagami-agent/stream`)
-- `mastraClient.getAgent('kagami-agent')` — get agent handle
-- `agent.stream(userText, { memory: { thread: chatId, resource: resourceId } })` — stream response with memory
-- `mastraClient.getMemoryThread({ threadId, agentId: 'kagami-agent' })` — get memory thread
-- `thread.listMessages({ page: 0, perPage: 50, orderBy: { field: 'createdAt', direction: 'ASC' } })` — read message history
+- `mastraClient.getWorkflow('chat-workflow')` — get workflow handle
+- `workflow.createRun({ resourceId })` — create a new run (resourceId required)
+- `run.start({ inputData })` — start execution
+- `workflow.runById(runId)` — check run status
+- `mastraClient.getMemoryThread({ threadId, agentId: 'kagamiAgent' })` — get memory thread
+- `thread.listMessages({ perPage: 1000 })` — read message history (default perPage is 40, must override)
 
-Stream conversion chain (BFF):
-```
-agent.stream() → processDataStream → ReadableStream<ChunkType> → toAISdkStream → createUIMessageStream → createUIMessageStreamResponse (SSE)
-```
+## Contracts
+
+Inter-repo contracts: `plans-docs/v0.2/contracts.md`
 
 ## Railway Deployment
 
