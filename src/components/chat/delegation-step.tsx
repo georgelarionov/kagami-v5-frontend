@@ -7,12 +7,16 @@ import {
 } from '@/components/ui/steps'
 import { MessageContent } from '@/components/ui/message'
 import { CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { parseReportMarkers } from '@/lib/parse-report-markers'
+import { ReportCard } from '@/components/chat/report-card'
+import type { ReportMarker } from '@/lib/parse-report-markers'
 
 interface DelegationStepProps {
   agentName: string
   state: string
   output?: unknown
   errorText?: string
+  onViewReport?: (marker: ReportMarker) => void
 }
 
 function formatOutput(output: unknown): string | null {
@@ -27,7 +31,7 @@ function formatOutput(output: unknown): string | null {
   return String(output)
 }
 
-export function DelegationStep({ agentName, state, output, errorText }: DelegationStepProps) {
+export function DelegationStep({ agentName, state, output, errorText, onViewReport }: DelegationStepProps) {
   const isLoading = state === 'input-streaming' || state === 'input-available'
   const isError = state === 'output-error'
   const isDone = state === 'output-available'
@@ -53,9 +57,28 @@ export function DelegationStep({ agentName, state, output, errorText }: Delegati
       {isDone && outputText && (
         <StepsContent>
           <div className="text-sm">
-            <MessageContent markdown className="bg-transparent prose-sm dark:prose-invert">
-              {outputText}
-            </MessageContent>
+            {onViewReport ? (
+              parseReportMarkers(outputText).map((segment, i) => {
+                if (segment.type === 'report') {
+                  return (
+                    <ReportCard
+                      key={`delegation-report-${i}`}
+                      marker={segment.marker}
+                      onViewReport={onViewReport}
+                    />
+                  )
+                }
+                return (
+                  <MessageContent key={`delegation-text-${i}`} markdown className="bg-transparent prose-sm dark:prose-invert">
+                    {segment.content}
+                  </MessageContent>
+                )
+              })
+            ) : (
+              <MessageContent markdown className="bg-transparent prose-sm dark:prose-invert">
+                {outputText}
+              </MessageContent>
+            )}
           </div>
         </StepsContent>
       )}

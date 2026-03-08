@@ -1,6 +1,7 @@
 'use client'
 
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 
@@ -53,6 +54,29 @@ export function ToolParamsForm({ toolId, schema, values, onChange }: ToolParamsF
                 min={prop.minimum}
                 max={prop.maximum}
                 className="h-8 text-xs"
+              />
+            </div>
+          )
+        }
+
+        // Use Textarea for long-form string fields (guidelines, prompts, instructions)
+        const isLongForm = key.toLowerCase().includes('guidelines') ||
+          key.toLowerCase().includes('prompt') ||
+          key.toLowerCase().includes('instructions') ||
+          (prop.maxLength && prop.maxLength > 200)
+
+        if (isLongForm) {
+          return (
+            <div key={key} className="space-y-1">
+              <Label htmlFor={`${toolId}-${key}`} className="text-xs">
+                {label}
+              </Label>
+              <Textarea
+                id={`${toolId}-${key}`}
+                value={(values[key] as string) ?? defaultValue ?? ''}
+                onChange={(e) => onChange(key, e.target.value || undefined)}
+                rows={4}
+                className="text-xs"
               />
             </div>
           )

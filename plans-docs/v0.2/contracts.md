@@ -277,3 +277,50 @@ APIFY_TOKEN=   # Apify API token for MCP server
 - Thread itself preserved (can send new messages)
 - Does NOT delete chat record from frontend DB
 - Rejected while pendingMessage is set (active run)
+
+---
+
+## F9: Thesys Reports (Revised)
+
+### Architecture
+
+Reports are stored on kagami-api side (PostgresStore `kagami_reports` table).
+Research agent calls `generateReport` tool, saves c1Content to DB, returns `{ reportId, title }`.
+Research agent includes text marker `:::report{id="<reportId>" title="<title>"}:::` in response.
+Frontend parses markers in text parts, renders ReportCard, fetches c1Content from BFF proxy on demand.
+
+### Text Marker Format
+
+```
+:::report{id="<uuid>" title="<report title>"}:::
+```
+
+Embedded in assistant message text parts. Parsed by `src/lib/parse-report-markers.ts`.
+
+### Backend Endpoint (kagami-api)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/reports/:id` | Fetch report by ID (c1Content + metadata). Uses custom route, not `/api/*` (reserved by Mastra). |
+
+### BFF Proxy (kagami-web)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/reports/[id]` | Proxy to kagami-api with Clerk auth + ownership check |
+
+```
+Response: { id, resourceId, threadId, title, c1Content, artifactId, createdAt }
+Errors: 401, 404, 500
+```
+
+### Report Guidelines
+
+Stored in `project_config.toolParams.generateReport.guidelines` (string).
+Tool reads from requestContext via F6 middleware.
+
+### Environment (kagami-api)
+
+```bash
+THESYS_API_KEY=   # Thesys C1 API key
+```

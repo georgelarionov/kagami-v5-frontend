@@ -5,6 +5,9 @@ import { Message, MessageContent } from '@/components/ui/message'
 import { Tool } from '@/components/ui/tool'
 import type { ToolPart } from '@/components/ui/tool'
 import { DelegationStep } from '@/components/chat/delegation-step'
+import { ReportCard } from '@/components/chat/report-card'
+import { parseReportMarkers } from '@/lib/parse-report-markers'
+import type { ReportMarker } from '@/lib/parse-report-markers'
 import { Button } from '@/components/ui/button'
 import { Loader2, ChevronUp } from 'lucide-react'
 import type { UIMessage } from 'ai'
@@ -36,6 +39,7 @@ interface MessageListProps {
   isStreaming: boolean
   loadOlderError: Error | null
   onLoadOlder: () => Promise<void>
+  onViewReport: (marker: ReportMarker) => void
 }
 
 export function MessageList({
@@ -45,6 +49,7 @@ export function MessageList({
   isStreaming,
   loadOlderError,
   onLoadOlder,
+  onViewReport,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -120,16 +125,28 @@ export function MessageList({
             <div className="max-w-[85%] space-y-2">
               {msg.parts?.map((part, i) => {
                 if (part.type === 'text') {
-                  return (
-                    <MessageContent
-                      key={`${msg.id}-text-${i}`}
-                      markdown
-                      id={msg.id}
-                      className="bg-transparent dark:prose-invert"
-                    >
-                      {part.text}
-                    </MessageContent>
-                  )
+                  const segments = parseReportMarkers(part.text)
+                  return segments.map((segment, si) => {
+                    if (segment.type === 'report') {
+                      return (
+                        <ReportCard
+                          key={`${msg.id}-report-${si}`}
+                          marker={segment.marker}
+                          onViewReport={onViewReport}
+                        />
+                      )
+                    }
+                    return (
+                      <MessageContent
+                        key={`${msg.id}-text-${i}-${si}`}
+                        markdown
+                        id={msg.id}
+                        className="bg-transparent dark:prose-invert"
+                      >
+                        {segment.content}
+                      </MessageContent>
+                    )
+                  })
                 }
                 if (isDelegationPart(part)) {
                   const p = part as unknown as DelegationPart
@@ -140,6 +157,7 @@ export function MessageList({
                       state={p.state}
                       output={p.output}
                       errorText={p.errorText}
+                      onViewReport={onViewReport}
                     />
                   )
                 }
