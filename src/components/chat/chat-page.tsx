@@ -12,10 +12,23 @@ interface ChatPageProps {
   projectId: string
   initialMessages?: UIMessage[]
   pendingMessage?: string | null
+  hasMore: boolean
+  onLoadOlder: () => Promise<UIMessage[]>
+  isFetchingOlder: boolean
+  loadOlderError: Error | null
 }
 
-export function ChatPage({ chatId, projectId, initialMessages, pendingMessage: initialPendingMessage }: ChatPageProps) {
-  const { messages, sendMessage, status, stop, error } = useChatStream({
+export function ChatPage({
+  chatId,
+  projectId,
+  initialMessages,
+  pendingMessage: initialPendingMessage,
+  hasMore,
+  onLoadOlder,
+  isFetchingOlder,
+  loadOlderError,
+}: ChatPageProps) {
+  const { messages, sendMessage, status, stop, error, setMessages } = useChatStream({
     chatId,
     projectId,
     initialMessages,
@@ -23,6 +36,8 @@ export function ChatPage({ chatId, projectId, initialMessages, pendingMessage: i
 
   const [pendingMessage, setPendingMessage] = useState(initialPendingMessage ?? null)
   const lastSentRef = useRef<string | null>(null)
+  const messagesRef = useRef(messages)
+  messagesRef.current = messages
 
   const handleSend = useCallback((params: { text: string }) => {
     lastSentRef.current = params.text
@@ -38,12 +53,35 @@ export function ChatPage({ chatId, projectId, initialMessages, pendingMessage: i
     }
   }, [pendingMessage, sendMessage])
 
+  const handleLoadOlder = useCallback(async () => {
+    const olderMessages = await onLoadOlder()
+    if (olderMessages.length > 0) {
+      const combined = [...olderMessages, ...messagesRef.current]
+      // Deduplicate by ID — Mastra pages may overlap at boundaries
+      const seen = new Set<string>()
+      const deduped = combined.filter(msg => {
+        if (seen.has(msg.id)) return false
+        seen.add(msg.id)
+        return true
+      })
+      setMessages(deduped)
+    }
+  }, [onLoadOlder, setMessages])
+
+  const isStreaming = status !== 'ready'
   const showPendingRetry = pendingMessage && status === 'ready' && messages.length > 0
 
   return (
     <div className="relative flex h-screen w-full flex-col overflow-hidden">
       <div className="flex-1 min-h-0 overflow-y-auto">
-        <MessageList messages={messages} />
+        <MessageList
+          messages={messages}
+          hasMore={hasMore}
+          isFetchingOlder={isFetchingOlder}
+          isStreaming={isStreaming}
+          loadOlderError={loadOlderError}
+          onLoadOlder={handleLoadOlder}
+        />
       </div>
       <div>
         {showPendingRetry && (

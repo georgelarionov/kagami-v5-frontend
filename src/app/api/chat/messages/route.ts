@@ -12,6 +12,9 @@ export async function GET(req: NextRequest) {
   const chatId = req.nextUrl.searchParams.get('chatId')
   if (!chatId) return NextResponse.json({ error: 'Missing chatId' }, { status: 400 })
 
+  const page = Math.max(0, parseInt(req.nextUrl.searchParams.get('page') ?? '0') || 0)
+  const perPage = Math.min(100, Math.max(1, parseInt(req.nextUrl.searchParams.get('perPage') ?? '50') || 50))
+
   // Verify user owns the project
   const [chat] = await getDb()
     .select({ id: chats.id })
@@ -23,12 +26,16 @@ export async function GET(req: NextRequest) {
   try {
     const thread = mastraClient.getMemoryThread({ threadId: chatId, agentId: 'kagami-agent' })
     const result = await thread.listMessages({
-      page: 0,
-      perPage: 50,
-      orderBy: { field: 'createdAt', direction: 'ASC' },
+      page,
+      perPage,
+      orderBy: { field: 'createdAt', direction: 'DESC' },
     })
-    return NextResponse.json({ messages: result.messages })
+    // Reverse to chronological order (ASC) for client rendering
+    const messages = [...result.messages].reverse()
+    // Defensive: client-js type lacks hasMore, compute from result length
+    const hasMore = result.messages.length === perPage
+    return NextResponse.json({ messages, hasMore })
   } catch {
-    return NextResponse.json({ messages: [] })
+    return NextResponse.json({ messages: [], hasMore: false })
   }
 }
