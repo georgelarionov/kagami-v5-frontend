@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
   if (!chat) return NextResponse.json({ error: 'Chat not found' }, { status: 404 })
 
   try {
-    const thread = mastraClient.getMemoryThread({ threadId: chatId, agentId: 'kagami-agent' })
+    const thread = mastraClient.getMemoryThread({ threadId: chatId, agentId: 'kagami-supervisor' })
     const result = await thread.listMessages({
       page,
       perPage,
