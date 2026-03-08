@@ -1,5 +1,7 @@
 # F6. Конфигурация на уровне проекта через Request Context — План реализации
 
+> **Status: COMPLETE (frontend)** — Фазы 1, 2, 4 реализованы и задеплоены. Фаза 3 (бэкенд: middleware + dynamic config) — pending, реализуется в kagami-api.
+
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
 > Конфигурация per-project: системные промпты, выбор тулов, параметры тулов. Хранится в БД, применяется через Mastra `requestContext`.
