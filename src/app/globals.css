@@ -187,3 +187,27 @@
   0%, 100% { transform: scaleY(0.4); }
   50% { transform: scaleY(1); }
 }
+
+/* C1 report preview card — fix title overlapping illustration */
+.c1-report-preview__left-container {
+  max-width: 65% !important;
+}
+
+.c1-report-preview__title {
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+/* C1 report preview — rename "View" button to Russian */
+.c1-report-preview .crayon-button-base {
+  font-size: 0;
+}
+
+.c1-report-preview .crayon-button-base > svg {
+  display: none;
+}
+
+.c1-report-preview .crayon-button-base::after {
+  content: "Открыть отчет";
+  font-size: 16px;
+}
