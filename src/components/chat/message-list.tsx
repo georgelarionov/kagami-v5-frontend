@@ -5,9 +5,8 @@ import { Message, MessageContent } from '@/components/ui/message'
 import { Tool } from '@/components/ui/tool'
 import type { ToolPart } from '@/components/ui/tool'
 import { DelegationStep } from '@/components/chat/delegation-step'
-import { ReportCard } from '@/components/chat/report-card'
+import { ReportEmbed } from '@/components/chat/report-embed'
 import { parseReportMarkers } from '@/lib/parse-report-markers'
-import type { ReportMarker } from '@/lib/parse-report-markers'
 import { Button } from '@/components/ui/button'
 import { Loader2, ChevronUp } from 'lucide-react'
 import type { UIMessage } from 'ai'
@@ -39,7 +38,6 @@ interface MessageListProps {
   isStreaming: boolean
   loadOlderError: Error | null
   onLoadOlder: () => Promise<void>
-  onViewReport: (marker: ReportMarker) => void
 }
 
 export function MessageList({
@@ -49,7 +47,6 @@ export function MessageList({
   isStreaming,
   loadOlderError,
   onLoadOlder,
-  onViewReport,
 }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -129,10 +126,9 @@ export function MessageList({
                   return segments.map((segment, si) => {
                     if (segment.type === 'report') {
                       return (
-                        <ReportCard
+                        <ReportEmbed
                           key={`${msg.id}-report-${si}`}
                           marker={segment.marker}
-                          onViewReport={onViewReport}
                         />
                       )
                     }
@@ -157,7 +153,6 @@ export function MessageList({
                       state={p.state}
                       output={p.output}
                       errorText={p.errorText}
-                      onViewReport={onViewReport}
                     />
                   )
                 }
