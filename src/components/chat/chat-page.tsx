@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useRef, useState } from 'react'
-import { ReportDrawer } from './report-drawer'
 import { useChatStream } from '@/hooks/use-chat-stream'
 import { useClearHistory } from '@/hooks/use-clear-history'
 import { MessageList } from './message-list'
@@ -10,8 +9,6 @@ import { RunStatus } from './run-status'
 import { ClearHistoryButton } from './clear-history-button'
 import { ProjectSettings } from '@/components/settings/project-settings'
 import type { UIMessage } from 'ai'
-import type { ReportMarker } from '@/lib/parse-report-markers'
-
 interface ChatPageProps {
   chatId: string
   projectId: string
@@ -44,16 +41,6 @@ export function ChatPage({
   const lastSentRef = useRef<string | null>(null)
   const messagesRef = useRef(messages)
   messagesRef.current = messages
-
-  const [reportDrawer, setReportDrawer] = useState<{
-    open: boolean
-    reportId: string | null
-    title: string
-  }>({ open: false, reportId: null, title: '' })
-
-  const handleViewReport = useCallback((marker: ReportMarker) => {
-    setReportDrawer({ open: true, reportId: marker.id, title: marker.title })
-  }, [])
 
   const handleSend = useCallback((params: { text: string }) => {
     lastSentRef.current = params.text
@@ -112,7 +99,6 @@ export function ChatPage({
           isStreaming={isStreaming}
           loadOlderError={loadOlderError}
           onLoadOlder={handleLoadOlder}
-          onViewReport={handleViewReport}
         />
       </div>
       <div>
@@ -131,12 +117,6 @@ export function ChatPage({
         />
         <Composer onSend={handleSend} onStop={stop} status={status} />
       </div>
-      <ReportDrawer
-        open={reportDrawer.open}
-        onOpenChange={(open) => setReportDrawer((prev) => ({ ...prev, open }))}
-        reportId={reportDrawer.reportId}
-        title={reportDrawer.title}
-      />
     </div>
   )
 }
